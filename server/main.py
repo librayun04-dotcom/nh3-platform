@@ -381,13 +381,13 @@ def api_cases():
 
 
 @app.post("/api/run_case")
-async def api_run_case(case_id: str = Form(...)):
-    """内置案例一键运行：默认模型推理 + 三基线对比 + 完整曲线"""
+async def api_run_case(case_id: str = Form(...), model: str = Form("")):
+    """内置案例一键运行：指定（或默认）模型推理 + 三基线对比 + 完整曲线"""
     case = next((c for c in BUILTIN_CASES if c["id"] == case_id), None)
     if not case:
         raise HTTPException(404, f"案例 {case_id} 不存在")
     curve = _case_curve(case)
-    model_name = resolve_default_model()
+    model_name = model.strip() or resolve_default_model()
     result = run_dispatch(model_name, curve)
     result["baselines"] = {k: run_baseline_on_curve(k, curve)["summary"]
                            for k in ("no_ely", "flat", "curtail_first")}
