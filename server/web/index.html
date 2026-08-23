@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>氨电联产 AGC 智能调度平台</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<style>
+:root {
+  --bg: #f1f5f9; --panel: #ffffff; --line: #e2e8f0;
+  --primary: #2563eb; --primary-dark: #1d4ed8;
+  --text: #0f172a; --dim: #64748b;
+  --green: #16a34a; --orange: #ea580c; --red: #dc2626; --purple: #7c3aed;
+  --cyan: #0891b2;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+  min-height: 100vh;
+}
+.header {
+  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 70%, #3b82f6 100%);
+  color: #fff; padding: 20px 24px 18px;
+}
+.header h1 { font-size: 22px; letter-spacing: 2px; font-weight: 700; }
+.header .sub { font-size: 12.5px; opacity: .85; margin-top: 4px; letter-spacing: 1px; }
+.header .model-tag {
+  display: inline-block; margin-top: 8px; font-size: 12px;
+  background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.35);
+  border-radius: 14px; padding: 3px 12px; letter-spacing: .5px;
+}
+
+.tabs { display: flex; gap: 4px; background: var(--panel); border-bottom: 1px solid var(--line);
+  padding: 0 24px; position: sticky; top: 0; z-index: 10; }
+.tab { background: none; border: none; color: var(--dim); font-size: 14px;
+  padding: 13px 20px; cursor: pointer; border-bottom: 2.5px solid transparent;
+  letter-spacing: 1px; transition: .15s; font-family: inherit; }
+.tab:hover { color: var(--primary); }
+.tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+
+.page { display: none; max-width: 1440px; margin: 0 auto; padding: 18px 24px 32px; }
+.page.active { display: block; }
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 16px 18px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(15,23,42,.05); }
+.card h3 { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px; }
+.card h3::before { content: ''; width: 3.5px; height: 15px; background: var(--primary); border-radius: 2px; }
+
+.row { display: flex; gap: 14px; flex-wrap: wrap; }
+.col { flex: 1; min-width: 280px; }
+
+label { font-size: 13px; color: var(--dim); display: block; margin: 6px 0 4px; }
+input[type=file], input[type=number], input[type=text] {
+  width: 100%; background: #fff; border: 1px solid #cbd5e1; border-radius: 7px;
+  color: var(--text); padding: 9px 11px; font-size: 13px; outline: none; transition: .15s;
+}
+input:hover { border-color: #94a3b8; }
+input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,.12); }
+
+.btn { display: inline-block; background: var(--primary); color: #fff; border: none;
+  border-radius: 7px; padding: 10px 22px; font-size: 13.5px; cursor: pointer;
+  letter-spacing: 1px; transition: .15s; font-family: inherit; }
+.btn:hover { background: var(--primary-dark); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.outline { background: #fff; color: var(--primary); border: 1px solid var(--primary); }
+.btn.outline:hover { background: #eff6ff; }
+.btn.danger { background: var(--red); }
+.btn.danger:hover { background: #b91c1c; }
+.btn.sm { padding: 7px 14px; font-size: 12.5px; }
+
+/* 内置案例卡片 */
+.cases { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.case-card { background: #fff; border: 1px solid var(--line); border-radius: 10px;
+  padding: 14px 16px; cursor: pointer; transition: .18s; position: relative; overflow: hidden; }
+.case-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+  background: var(--case-color, var(--primary)); }
+.case-card:hover { border-color: var(--case-color, var(--primary));
+  box-shadow: 0 4px 14px rgba(37,99,235,.13); transform: translateY(-2px); }
+.case-card.running { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.25); }
+.case-card .name { font-size: 15.5px; font-weight: 700; color: var(--text); }
+.case-card .tagline { font-size: 12px; color: var(--case-color, var(--primary));
+  margin: 3px 0 6px; font-weight: 600; letter-spacing: .5px; }
+.case-card .desc { font-size: 12.5px; color: var(--dim); line-height: 1.65; }
+.case-card .go { margin-top: 9px; font-size: 12px; color: var(--primary); font-weight: 600; }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 13px 14px; text-align: center; box-shadow: 0 1px 3px rgba(15,23,42,.05); }
+.kpi .v { font-size: 21px; font-weight: 700; color: var(--primary); }
+.kpi.green .v { color: var(--green); } .kpi.orange .v { color: var(--orange); }
+.kpi.red .v { color: var(--red); } .kpi.purple .v { color: var(--purple); }
+.kpi .l { font-size: 11.5px; color: var(--dim); margin-top: 3px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { color: var(--dim); font-weight: 600; text-align: left; padding: 8px 10px;
+  border-bottom: 1.5px solid var(--line); white-space: nowrap; background: #f8fafc; }
+td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; color: var(--text); }
+tr:hover td { background: #f8fafc; }
+
+.log-box { background: #0f172a; border-radius: 8px; padding: 12px; height: 200px;
+  overflow-y: auto; font-family: Consolas, monospace; font-size: 12px; line-height: 1.7; }
+.log-box div { color: #94a3b8; }
+.log-box .ok { color: #4ade80; } .log-box .err { color: #f87171; } .log-box .info { color: #60a5fa; }
+
+.progress { height: 8px; background: #e2e8f0; border-radius: 5px; overflow: hidden; margin: 10px 0 6px; }
+.progress i { display: block; height: 100%; width: 0%; border-radius: 5px;
+  background: linear-gradient(90deg, #3b82f6, #2563eb); transition: width .5s; }
+
+.badge { display: inline-block; padding: 2px 12px; border-radius: 12px; font-size: 11.5px; margin-left: 8px; vertical-align: middle; }
+.badge.run { background: #dcfce7; color: var(--green); }
+.badge.stop { background: #fee2e2; color: var(--red); }
+
+.sim-ctrl { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; }
+.sim-clock { font-size: 27px; font-weight: 700; color: var(--primary); font-family: Consolas, monospace;
+  min-width: 108px; text-align: center; background: #eff6ff; border: 1px solid #bfdbfe;
+  border-radius: 8px; padding: 4px 10px; margin-left: auto; }
+.hint { font-size: 12px; color: var(--dim); line-height: 1.75; margin-top: 8px;
+  background: #f8fafc; border-left: 3px solid #cbd5e1; padding: 8px 12px; border-radius: 0 6px 6px 0; }
+.result-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.result-head b { font-size: 15px; color: var(--text); }
+.result-head span { font-size: 12.5px; color: var(--dim); }
+@media (max-width: 1100px) { .col { min-width: 100%; } .sim-clock { margin-left: 0; } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>氨电联产 AGC 智能调度平台</h1>
+  <div class="sub">曲线预测 · 多模型对比 · 在线训练 · 实时 AGC 滚动仿真 —— PPO Deep Reinforcement Learning</div>
+  <div class="model-tag" id="modelTag">默认模型加载中…</div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" data-p="predict">推理预测</button>
+  <button class="tab" data-p="compare">多模型对比</button>
+  <button class="tab" data-p="train">在线训练</button>
+  <button class="tab" data-p="sim">实时仿真</button>
+</div>
+
+<!-- ==================== 推理预测 ==================== -->
+<div class="page active" id="page-predict">
+  <div class="card">
+    <h3>内置测试案例（点击即用本地已训练模型运行完整评估）</h3>
+    <div class="cases" id="caseGrid"></div>
+  </div>
+
+  <div class="card">
+    <h3>自定义曲线上传</h3>
+    <div class="row" style="align-items:flex-end">
+      <div class="col" style="flex:2">
+        <label>曲线文件（CSV 或 Excel：pv / wind / load 三列，96 行 15 分钟值或 24 行小时值自动插值）</label>
+        <input type="file" id="pFile" accept=".csv,.xlsx,.xls">
+      </div>
+      <div style="padding-bottom:1px">
+        <button class="btn" onclick="doPredict()" id="pBtn">上传并推理</button>
+        <button class="btn outline sm" onclick="downloadSample()">下载示例 CSV</button>
+      </div>
+    </div>
+    <div class="hint">
+      无表头文件按「光伏、风电、负荷」列序解析；表头支持 pv/solar/光伏、wind/风电、load/demand/负荷。
+      推理输出为未来一日 96 个时步（15 分钟分辨率）的电解槽功率指令与全系统经济结算。
+    </div>
+  </div>
+
+  <div id="pResult" style="display:none">
+    <div class="result-head"><b id="pTitle">评估结果</b><span id="pMeta"></span></div>
+    <div class="kpis" id="pKpi"></div>
+    <div class="row">
+      <div class="card col" style="flex:2">
+        <h3>96 时步功率调度曲线</h3>
+        <div id="pDispatch" style="height:360px"></div>
+      </div>
+      <div class="card col">
+        <h3>电解槽运行档位时间线</h3>
+        <div id="pAction" style="height:196px"></div>
+        <h3 style="margin-top:12px">四策略综合收益对比</h3>
+        <div id="pCompare" style="height:172px"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>逐时步调度指令明细</h3>
+      <div style="max-height:280px;overflow-y:auto">
+        <table id="pTable"></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 多模型对比 ==================== -->
+<div class="page" id="page-compare">
+  <div class="card">
+    <h3>同一曲线 · 全部已训练模型批量对比</h3>
+    <div class="row" style="align-items:flex-end">
+      <div class="col" style="flex:2">
+        <label>曲线文件（CSV / Excel）</label>
+        <input type="file" id="cFile" accept=".csv,.xlsx,.xls">
+      </div>
+      <div style="padding-bottom:1px">
+        <button class="btn" onclick="doCompare()" id="cBtn">批量对比</button>
+      </div>
+    </div>
+    <div class="hint">对当前磁盘上全部 checkpoint 逐一执行一日调度，横向比较收益、消纳率与产量。模型较多时耗时相应增加。</div>
+  </div>
+  <div class="card" id="cWrap" style="display:none">
+    <h3>指标横向对比</h3>
+    <div id="cBar" style="height:320px"></div>
+    <table id="cTable" style="margin-top:12px"></table>
+  </div>
+</div>
+
+<!-- ==================== 在线训练 ==================== -->
+<div class="page" id="page-train">
+  <div class="card">
+    <h3>启动后台训练<span id="tState" class="badge stop">空闲</span></h3>
+    <div class="row">
+      <div class="col"><label>训练步数</label><input type="number" id="tSteps" value="300000"></div>
+      <div class="col"><label>并行环境数</label><input type="number" id="tEnvs" value="16"></div>
+      <div class="col"><label>随机种子</label><input type="number" id="tSeed" value="42"></div>
+      <div class="col"><label>保存目录</label><input type="text" id="tOut" value="output_web"></div>
+    </div>
+    <div style="margin-top:12px">
+      <button class="btn" id="tStartBtn" onclick="trainStart()">启动训练</button>
+      <button class="btn danger" id="tStopBtn" onclick="trainStop()" disabled>停止</button>
+    </div>
+    <div class="progress"><i id="tProg"></i></div>
+    <div style="font-size:12.5px;color:var(--dim)" id="tInfo">尚未启动训练</div>
+  </div>
+  <div class="row">
+    <div class="card col" style="flex:2">
+      <h3>训练收敛曲线（每秒实时推送）</h3>
+      <div id="tChart" style="height:340px"></div>
+    </div>
+    <div class="card col">
+      <h3>运行日志</h3>
+      <div class="log-box" id="tLog"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 实时仿真 ==================== -->
+<div class="page" id="page-sim">
+  <div class="card">
+    <h3>火电 AGC 实时滚动仿真 —— 每 15 分钟下发一次电解槽功率指令</h3>
+    <div class="sim-ctrl">
+      <button class="btn sm" onclick="simStart()">开始仿真</button>
+      <button class="btn outline sm" onclick="simPause()">暂停</button>
+      <button class="btn outline sm" onclick="simStepOnce()">单步</button>
+      <button class="btn outline sm" onclick="simReset()">重置场景</button>
+      <span style="font-size:12.5px;color:var(--dim)">速度</span>
+      <input type="number" id="sSpeed" value="150" style="width:86px" title="每步间隔毫秒">
+      <div class="sim-clock" id="simClock">--:--</div>
+    </div>
+    <div class="kpis" id="sKpi" style="margin-top:12px;margin-bottom:0"></div>
+  </div>
+  <div class="row">
+    <div class="card col" style="flex:2">
+      <h3>实时功率平衡（滚动窗口）</h3>
+      <div id="sPowerChart" style="height:330px"></div>
+    </div>
+    <div class="card col">
+      <h3>累计氢氨产量</h3>
+      <div id="sCumChart" style="height:168px"></div>
+      <h3 style="margin-top:10px">当前调度指令</h3>
+      <div id="sCmd" style="font-size:14px;line-height:1.9;color:var(--text)">
+        点击「开始仿真」进入 AGC 滚动决策
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+
+/* ---------- Tab 切换 ---------- */
+$$('.tab').forEach(t => t.onclick = () => {
+  $$('.tab').forEach(x => x.classList.remove('active'));
+  t.classList.add('active');
+  $$('.page').forEach(p => p.classList.remove('active'));
+  $('#page-' + t.dataset.p).classList.add('active');
+  Object.values(CHARTS).forEach(c => c.resize());
+});
+
+/* ---------- 图表 ---------- */
+const CHARTS = {};
+function chart(id){ if(!CHARTS[id]) CHARTS[id]=echarts.init(document.getElementById(id)); return CHARTS[id]; }
+window.addEventListener('resize', ()=>Object.values(CHARTS).forEach(c=>c.resize()));
+const AXIS={color:'#64748b'}, SPLIT={lineStyle:{color:'#e8edf4'}};
+const C = { pv:'#f59e0b', wind:'#16a34a', load:'#2563eb', ely:'#dc2626', th:'#7c3aed',
+            curt:'rgba(234,88,12,.45)', dim:'#64748b' };
+
+/* ---------- 头部默认模型信息 ---------- */
+async function loadModelTag(){
+  try{
+    const j = await (await fetch('/api/models')).json();
+    const best = j.models.slice().sort((a,b)=>b.steps-a.steps)[0];
+    $('#modelTag').textContent =
+      `当前默认模型：${best ? best.name : '无'}（${best?best.steps.toLocaleString():0} 步 · 设备 ${(j.device||'cpu').toUpperCase()}）`;
+  }catch(e){ $('#modelTag').textContent='后端未连接'; }
+}
+loadModelTag();
+
+/* ---------- 日志 ---------- */
+function log(msg, cls='info'){
+  const d = document.createElement('div');
+  d.className = cls; d.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  $('#tLog').appendChild(d); $('#tLog').scrollTop = 1e6;
+}
+
+/* ---------- 内置案例 ---------- */
+let CASES = [];
+const CASE_COLORS = {'summer_sunny':'#ea580c','winter_rain':'#2563eb','autumn_cloudy':'#16a34a','spring_wind':'#0891b2'};
+async function loadCases(){
+  try{
+    const j = await (await fetch('/api/cases')).json();
+    CASES = j.cases;
+    $('#caseGrid').innerHTML = CASES.map(c=>`
+      <div class="case-card" id="case-${c.id}" style="--case-color:${CASE_COLORS[c.id]||'#2563eb'}" onclick="runCase('${c.id}')">
+        <div class="name">${c.name}</div>
+        <div class="tagline">${c.tagline} · ${c.region}</div>
+        <div class="desc">${c.desc}</div>
+        <div class="go">使用默认模型运行 →</div>
+      </div>`).join('');
+  }catch(e){ $('#caseGrid').innerHTML='<div class="hint">案例列表加载失败，请确认后端已启动</div>'; }
+}
+loadCases();
+
+async function runCase(id){
+  $$('.case-card').forEach(x=>x.classList.remove('running'));
+  const card = $('#case-'+id); if(card) card.classList.add('running');
+  log(`开始运行内置案例 ${id}`);
+  try{
+    const body = new FormData(); body.append('case_id', id);
+    const r = await fetch('/api/run_case', {method:'POST', body});
+    if(!r.ok) throw new Error((await r.json()).detail || r.statusText);
+    const j = await r.json();
+    renderPredict(j, `${j.case.name} · ${j.case.region}`, `${j.case.tagline}`);
+    log(`案例完成: 收益 ${j.summary.reward_wan} 万/日`, 'ok');
+  }catch(e){ alert('案例运行失败: '+e.message); log('案例失败: '+e.message,'err'); }
+  if(card) card.classList.remove('running');
+}
+
+/* ---------- 示例CSV下载 ---------- */
+async function downloadSample(){
+  const d = await (await fetch('/api/sample_curve?season=summer&weather=sunny')).json();
+  const csv = 'pv,wind,load\n' + d.pv.map((v,i)=>`${v},${d.wind[i]},${d.load[i]}`).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  a.download = 'sample_summer_sunny.csv'; a.click();
+}
+
+/* ---------- 文件推理 ---------- */
+async function doPredict(){
+  const f = $('#pFile').files[0];
+  if(!f) return alert('请先选择曲线文件，或直接点击上方内置案例');
+  const fd = new FormData(); fd.append('file', f);
+  $('#pBtn').disabled = true; $('#pBtn').textContent = '推理中…';
+  try{
+    const r = await fetch('/api/predict', {method:'POST', body:fd});
+    if(!r.ok){ const e = await r.json(); throw new Error(e.detail||r.statusText); }
+    const j = await r.json();
+    renderPredict(j, `自定义曲线：${j.filename}`, '');
+    log(`推理完成: 收益 ${j.summary.reward_wan} 万/日`, 'ok');
+  }catch(e){ alert('推理失败: '+e.message); log('推理失败: '+e.message,'err'); }
+  $('#pBtn').disabled=false; $('#pBtn').textContent='上传并推理';
+}
+
+function renderPredict(j, title, meta){
+  $('#pResult').style.display='block';
+  $('#pTitle').textContent = title;
+  $('#pMeta').textContent = meta ? meta + ' · 模型 ' + (j.model||'') : '模型 ' + (j.model||'');
+  const s = j.summary;
+  const kpis = [
+    ['综合收益', s.reward_wan+' 万/日', ''],
+    ['新能源消纳率', s.utilization_pct+'%', 'green'],
+    ['弃电率', s.curtail_rate_pct+'%', 'orange'],
+    ['日产氢', s.h2_t+' t', ''],
+    ['日产氨', s.nh3_t+' t', 'green'],
+    ['CO₂ 减排', s.co2_reduction_t+' t/日', 'purple'],
+  ];
+  $('#pKpi').innerHTML = kpis.map(k=>`<div class="kpi ${k[2]}"><div class="v">${k[1]}</div><div class="l">${k[0]}</div></div>`).join('');
+  const ts=j.steps, curve=j.curve;
+
+  chart('pDispatch').setOption({
+    tooltip:{trigger:'axis'},
+    legend:{textStyle:{color:'#334155',fontSize:11},top:0},
+    grid:{left:52,right:18,top:32,bottom:28},
+    xAxis:{type:'category',data:ts.map(x=>x.hour),axisLabel:{...AXIS,interval:11},axisLine:{lineStyle:{color:'#cbd5e1'}}},
+    yAxis:{type:'value',name:'MW',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT},
+    series:[
+      {name:'光伏',type:'line',smooth:true,showSymbol:false,data:curve.pv,itemStyle:{color:C.pv},areaStyle:{opacity:.14}},
+      {name:'风电',type:'line',smooth:true,showSymbol:false,data:curve.wind,itemStyle:{color:C.wind},areaStyle:{opacity:.14}},
+      {name:'负荷',type:'line',smooth:true,showSymbol:false,data:curve.load,itemStyle:{color:C.load},lineStyle:{width:2}},
+      {name:'电解槽指令',type:'line',smooth:true,showSymbol:false,data:ts.map(x=>x.ely_mw),itemStyle:{color:C.ely},lineStyle:{width:3}},
+      {name:'弃电',type:'bar',data:ts.map(x=>x.curtail_mw),itemStyle:{color:C.curt},barWidth:3},
+    ]},true);
+
+  chart('pAction').setOption({
+    tooltip:{trigger:'axis',formatter:p=>`${p[0].data}: 档位${p[0].value}（${p[0].value*10}% 额定）`},
+    grid:{left:44,right:14,top:12,bottom:26},
+    xAxis:{type:'category',data:ts.map(x=>x.hour),axisLabel:{...AXIS,interval:11,fontSize:10},axisLine:{lineStyle:{color:'#cbd5e1'}}},
+    yAxis:{type:'value',max:10,name:'档位',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT},
+    series:[{type:'bar',data:ts.map(x=>x.action_level),barWidth:'100%',
+      itemStyle:{color:p=>['#e2e8f0','#cbd5e1','#93c5fd','#60a5fa','#3b82f6','#2563eb','#1d4ed8','#1e40af','#f59e0b','#ea580c','#dc2626'][p.value],borderRadius:2}}]},true);
+
+  const b=j.baselines||{};
+  const names=['无电解槽','恒定功率','贪心消纳','PPO 调度'];
+  const vals=[b.no_ely?.reward_wan??0, b.flat?.reward_wan??0, b.curtail_first?.reward_wan??0, s.reward_wan];
+  chart('pCompare').setOption({
+    tooltip:{trigger:'axis',formatter:'{b}: {c} 万元/日'},
+    grid:{left:58,right:10,top:14,bottom:40},
+    xAxis:{type:'category',data:names,axisLabel:{...AXIS,fontSize:10.5,interval:0},axisLine:{lineStyle:{color:'#cbd5e1'}}},
+    yAxis:{type:'value',name:'万元/日',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT},
+    series:[{type:'bar',data:vals,barWidth:26,label:{show:true,position:'top',color:'#334155',fontSize:11},
+      itemStyle:{color:p=>['#94a3b8','#cbd5e1','#16a34a','#dc2626'][p.dataIndex],borderRadius:[3,3,0,0]}}]},true);
+
+  $('#pTable').innerHTML =
+    '<tr><th>时刻</th><th>档位</th><th>电解槽 MW</th><th>火电 MW</th><th>弃电 MW</th><th>步收益（万元）</th></tr>' +
+    ts.map(x=>`<tr><td>${String(Math.floor(x.hour)).padStart(2,'0')}:${String(Math.round(x.hour%1*60)).padStart(2,'0')}</td>`+
+      `<td>${x.action_level}</td><td>${x.ely_mw}</td><td>${x.th_mw}</td><td>${x.curtail_mw}</td><td>${x.reward}</td></tr>`).join('');
+  chart('pDispatch').resize();
+}
+
+/* ---------- 多模型对比 ---------- */
+async function doCompare(){
+  const f=$('#cFile').files[0];
+  if(!f) return alert('请选择曲线文件');
+  const fd=new FormData(); fd.append('file',f);
+  $('#cBtn').disabled=true; $('#cBtn').textContent='对比中…';
+  try{
+    const r=await fetch('/api/compare',{method:'POST',body:fd});
+    const j=await r.json();
+    const ok=j.results.filter(x=>!x.error);
+    if(!ok.length) return alert('所有模型推理均失败');
+    $('#cWrap').style.display='block';
+    const metrics=['reward_wan','utilization_pct','h2_t','nh3_t'];
+    const mNames=['收益 万元/日','消纳率 %','产氢 t','产氨 t'];
+    chart('cBar').setOption({
+      tooltip:{trigger:'axis'},legend:{textStyle:{color:'#334155'},top:0},
+      grid:{left:56,right:16,top:34,bottom:64},
+      xAxis:{type:'category',data:ok.map(x=>x.model),axisLabel:{...AXIS,interval:0,rotate:20,fontSize:11},axisLine:{lineStyle:{color:'#cbd5e1'}}},
+      yAxis:{type:'value',axisLabel:AXIS,splitLine:SPLIT},
+      series:mNames.map((mn,i)=>({name:mn,type:'bar',data:ok.map(x=>x.summary[metrics[i]]),
+        itemStyle:{borderRadius:[3,3,0,0]}}))},true);
+    $('#cTable').innerHTML='<tr><th>模型</th>'+mNames.map(m=>`<th>${m}</th>`).join('')+'</tr>'+
+      ok.map(x=>`<tr><td>${x.model}</td>`+metrics.map(m=>`<td>${x.summary[m]}</td>`).join('')+'</tr>').join('');
+    log(`批量对比完成: ${ok.length}/${j.results.length} 个模型成功`,'ok');
+  }catch(e){alert('对比失败:'+e.message);}
+  $('#cBtn').disabled=false;$('#cBtn').textContent='批量对比';
+}
+
+/* ---------- 在线训练 ---------- */
+let es=null;
+function trainStart(){
+  const fd=new FormData();
+  fd.append('steps',$('#tSteps').value); fd.append('n_envs',$('#tEnvs').value);
+  fd.append('seed',$('#tSeed').value); fd.append('outdir',$('#tOut').value);
+  fetch('/api/train/start',{method:'POST',body:fd}).then(r=>r.json())
+    .then(j=>{log(j.msg||'已启动','ok');watchTrain();})
+    .catch(e=>alert('启动失败:'+e));
+}
+function trainStop(){ fetch('/api/train/stop',{method:'POST'}); }
+
+function watchTrain(){
+  if(es) es.close();
+  es=new EventSource('/api/train/stream');
+  const pts=[];
+  es.onmessage=ev=>{
+    const j=JSON.parse(ev.data);
+    pts.push(...j.new_points);
+    $('#tState').className='badge '+(j.running?'run':'stop');
+    $('#tState').textContent=j.running?'训练中':(j.finished?'已完成':'空闲');
+    const cfgT=j.config||{};
+    if(j.running&&cfgT.steps){
+      const last=pts.length?pts[pts.length-1].step:0;
+      $('#tProg').style.width=(last/cfgT.steps*100)+'%';
+      const lastPt=pts[pts.length-1];
+      $('#tInfo').textContent=`进度 ${last.toLocaleString()} / ${cfgT.steps.toLocaleString()} 步 · 回合 ${lastPt?lastPt.episode:0} · 最近回合收益 ${lastPt?lastPt.reward_mean:'-'} 万`;
+    }
+    if(!j.running){
+      $('#tStopBtn').disabled=true; $('#tStartBtn').disabled=false;
+      if(j.finished&&!j.error){
+        log('训练完成，新模型已注册为默认候选','ok');
+        if(j.final_model)log('保存路径: '+j.final_model,'ok');
+        loadModelTag();
+      }
+      if(j.error)log('训练出错: '+j.error.split('\n')[0],'err');
+      es.close(); es=null;
+    }else{$('#tStopBtn').disabled=false;$('#tStartBtn').disabled=true;}
+    chart('tChart').setOption({
+      tooltip:{trigger:'axis'},
+      legend:{textStyle:{color:'#334155'},top:0},
+      grid:{left:60,right:58,top:32,bottom:30},
+      xAxis:{type:'value',name:'步数',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT},
+      yAxis:[
+        {type:'value',name:'回合收益（万）',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT},
+        {type:'value',name:'学习率',nameTextStyle:AXIS,axisLabel:{...AXIS,formatter:v=>v.toExponential(0)},splitLine:{show:false}}],
+      series:[
+        {name:'回合均收益',type:'line',showSymbol:false,smooth:true,
+         data:pts.filter(p=>p.reward_mean!=null).map(p=>[p.step,p.reward_mean]),
+         itemStyle:{color:'#2563eb'},areaStyle:{opacity:.1},lineStyle:{width:2}},
+        {name:'消纳率 %',type:'line',showSymbol:false,
+         data:pts.map(p=>[p.step,p.util_pct]),itemStyle:{color:'#16a34a'},lineStyle:{width:1.5}},
+        {name:'学习率',type:'line',yAxisIndex:1,showSymbol:false,
+         data:pts.map(p=>[p.step,p.lr]),itemStyle:{color:'#ea580c'},lineStyle:{type:'dashed',width:1}}]
+    },true);
+  };
+  es.addEventListener('end',()=>es&&es.close());
+}
+watchTrain();
+
+/* ---------- 实时仿真 ---------- */
+let ws=null;
+let simData={hour:[],pv:[],wind:[],load:[],ely:[],th:[],cumH:[],cumN:[]};
+function wsSend(o){ if(ws&&ws.readyState===1) ws.send(JSON.stringify(o)); }
+function simConnect(cb){
+  if(ws&&ws.readyState===1)return cb();
+  ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws/simulate`);
+  ws.onopen=()=>cb&&cb();
+  ws.onmessage=e=>{
+    const j=JSON.parse(e.data);
+    if(j.type==='started'){log('仿真会话已建立','ok');return;}
+    if(j.type==='paused'||j.type==='reset')return;
+    if(j.done&&j.summary){renderSimSummary(j.summary);return;}
+    if(j.t!==undefined)pushSimPoint(j);
+  };
+}
+function simStart(){
+  simConnect(()=>{
+    simData={hour:[],pv:[],wind:[],load:[],ely:[],th:[],cumH:[],cumN:[]};
+    wsSend({cmd:'start',seed:(Math.random()*99991)|0,interval_ms:+$('#sSpeed').value});
+  });
+}
+function simPause(){wsSend({cmd:'pause'});}
+function simStepOnce(){simConnect(()=>wsSend({cmd:'step'}));}
+function simReset(){
+  simConnect(()=>wsSend({cmd:'reset',seed:(Math.random()*99991)|0}));
+  simData={hour:[],pv:[],wind:[],load:[],ely:[],th:[],cumH:[],cumN:[]};
+}
+
+function pushSimPoint(j){
+  $('#simClock').textContent=String(Math.floor(j.hour)).padStart(2,'0')+':'+
+    String(Math.round(j.hour%1*60)).padStart(2,'0');
+  const D=simData;
+  D.hour.push(j.hour);D.pv.push(j.pv);D.wind.push(j.wind);D.load.push(j.load);
+  D.ely.push(j.ely_mw);D.th.push(j.th_mw);
+  D.cumH.push(j.cum_h2_t);D.cumN.push(j.cum_nh3_t);
+  const W=48, sl=a=>a.slice(-W);
+  chart('sPowerChart').setOption({
+    tooltip:{trigger:'axis'},
+    legend:{textStyle:{color:'#334155',fontSize:10},top:0},
+    grid:{left:48,right:16,top:30,bottom:26},
+    xAxis:{type:'category',data:sl(D.hour).map(h=>String(Math.floor(h)).padStart(2,'0')+':'+String(Math.round(h%1*60)).padStart(2,'0')),
+      axisLabel:{...AXIS,interval:7,fontSize:10},axisLine:{lineStyle:{color:'#cbd5e1'}}},
+    yAxis:{type:'value',name:'MW',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT},
+    series:[
+      {name:'光伏',type:'line',showSymbol:false,data:sl(D.pv),itemStyle:{color:C.pv},areaStyle:{opacity:.12}},
+      {name:'风电',type:'line',showSymbol:false,data:sl(D.wind),itemStyle:{color:C.wind},areaStyle:{opacity:.12}},
+      {name:'负荷',type:'line',showSymbol:false,data:sl(D.load),itemStyle:{color:C.load},lineStyle:{width:2}},
+      {name:'电解槽',type:'line',showSymbol:false,data:sl(D.ely),itemStyle:{color:C.ely},lineStyle:{width:3}},
+      {name:'火电',type:'line',showSymbol:false,data:sl(D.th),itemStyle:{color:C.th},lineStyle:{type:'dashed'}},
+    ]},true);
+  chart('sCumChart').setOption({
+    tooltip:{trigger:'axis'},
+    legend:{textStyle:{color:'#334155',fontSize:10},top:0},
+    grid:{left:46,right:46,top:26,bottom:22},
+    xAxis:{type:'category',data:D.hour.map(h=>h.toFixed(1)),
+      axisLabel:{...AXIS,interval:15,fontSize:10},axisLine:{lineStyle:{color:'#cbd5e1'}}},
+    yAxis:[
+      {type:'value',name:'氢 t',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT},
+      {type:'value',name:'氨 t',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:{show:false}}],
+    series:[
+      {name:'累计产氢',type:'line',showSymbol:false,data:D.cumH,itemStyle:{color:'#0891b2'},areaStyle:{opacity:.12}},
+      {name:'累计产氨',type:'line',yAxisIndex:1,showSymbol:false,data:D.cumN,itemStyle:{color:'#16a34a'}}]},true);
+  $('#sKpi').innerHTML=[
+    ['累计回报',j.cum_reward_wan+' 万',''],
+    ['新能源利用率',(j.utilization*100).toFixed(1)+'%','green'],
+    ['当前档位',j.action_level+' / 10','orange'],
+    ['电解槽出力',j.ely_mw+' MW','red'],
+    ['累计产氢',j.cum_h2_t.toFixed(2)+' t',''],
+    ['累计产氨',j.cum_nh3_t.toFixed(3)+' t','green'],
+  ].map(k=>`<div class="kpi ${k[2]}"><div class="v">${k[1]}</div><div class="l">${k[0]}</div></div>`).join('');
+  $('#sCmd').innerHTML=
+    `第 ${String(j.t+1).padStart(2,'0')} 时步 · 下发电解槽档位 <b style="font-size:21px;color:#dc2626">${j.action_level}</b>/10`+
+    `（${j.action_power}% 额定 = ${j.ely_mw} MW）<br>`+
+    `<span style="font-size:12.5px;color:var(--dim)">火电出力 ${j.th_mw} MW · 瞬时弃电 ${j.curtail_mw} MW · 本步收益 ${j.step_reward_wan} 万元</span>`;
+}
+function renderSimSummary(s){
+  log('一日 96 时步仿真结束','ok');
+  $('#sCmd').innerHTML=
+    `<b style="color:#16a34a">全天 96 时步仿真完成</b><br>`+
+    `综合收益 ${s.total_reward_wan} 万元 · 产氢 ${s.h2_t} t · 产氨 ${s.nh3_t} t<br>`+
+    `<span style="font-size:12.5px;color:var(--dim)">新能源利用率 ${s.utilization_pct}%</span>`;
+}
+window.addEventListener('beforeunload',()=>{try{wsSend({cmd:'stop'})}catch(e){}});
+</script>
+</body>
+</html>
