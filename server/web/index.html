@@ -735,15 +735,25 @@ async function runCase(id){
       series:[{type:'bar',data:ts.map(x=>x.action_level),barWidth:'100%',
         itemStyle:{color:p=>['#eef2f7','#dbe4ef','#bfd7fe','#93c5fd','#60a5fa','#3b82f6','#2563eb','#1d4ed8','#f59e0b','#ea580c','#dc2626'][p.value],borderRadius:2}}]},true);
     const b=j.baselines||{};
+    const cmpVals=[b.no_ely?.reward_wan??0,b.flat?.reward_wan??0,
+                   b.curtail_first?.reward_wan??0,s.reward_wan];
+    /* 全负/全正时零轴贴绘图区边缘，固定 position:'top' 的标签会被裁剪：
+       ① 标签按数值符号动态定位（正数柱顶上方 / 负数柱底下端）
+       ② 坐标轴按极值向外扩 20% 留出标签空间 */
+    const vmin=Math.min(...cmpVals),vmax=Math.max(...cmpVals);
+    const yMin=+(Math.min(0,vmin)*1.2).toFixed(1);
+    const yMax=+((vmax>0?vmax*1.2:(vmin>=0?1:0))).toFixed(1);
     chart('rpCompare').setOption({
       backgroundColor:'transparent',
       tooltip:{trigger:'axis',formatter:'{b}: {c} 万元/日'},
-      grid:{left:58,right:8,top:12,bottom:40},
+      grid:{left:58,right:8,top:vmin<0?36:18,bottom:46},
       xAxis:{type:'category',data:['无电解槽','恒定功率','贪心消纳','本系统'],
         axisLabel:{...AXIS,fontSize:10.5,interval:0},axisLine:{lineStyle:{color:'#c3ced9'}}},
-      yAxis:axisY('万元'),
-      series:[{type:'bar',data:[b.no_ely?.reward_wan??0,b.flat?.reward_wan??0,b.curtail_first?.reward_wan??0,s.reward_wan],
-        barWidth:26,label:{show:true,position:'top',color:'#334155',fontSize:11},
+      yAxis:{type:'value',name:'万元',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT,
+             min:yMin,max:yMax},
+      series:[{type:'bar',
+        data:cmpVals.map(v=>({value:v,label:{position:v>=0?'top':'bottom'}})),
+        barWidth:26,label:{show:true,color:'#334155',fontSize:11},
         itemStyle:{color:p=>['#94a3b8','#cbd5e1','#16a34a','#2563eb'][p.dataIndex],borderRadius:[3,3,0,0]}}]},true);
     Object.values(CHARTS).forEach(c=>c.resize());
     pushEvt('info',`典型日复盘完成：${j.case.name}，全天收益 ${s.reward_wan} 万元`);
