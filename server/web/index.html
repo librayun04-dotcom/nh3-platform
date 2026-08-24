@@ -546,7 +546,23 @@ $('#alarmChip').onclick=()=>{ackAllWarn();document.querySelector('.navstrip butt
    协议：hello(含当日历史回放)/step/day/day_done/paced/strategy */
 let ws=null,speedMs=1500,simDay=0,lastStep=null,curtOn=false,nextAt=0;
 const STRAT_LABEL={ppo:'PPO 智能调度',curtail_first:'贪心消纳',flat:'恒定功率',no_ely:'电解槽停运'};
-let series={hour:[],pv:[],wind:[],load:[],ely:[],th:[],curtail:[],cumH:[],cumN:[],util:[]};
+/* 跨日滚动历史：日切换仅插入断线标记，曲线保留最近3个运行日 */
+const HIST_MAX=96*3;
+let H={hour:[],day:[],pv:[],wind:[],load:[],ely:[],th:[],curtail:[],cumH:[],cumN:[],util:[]};
+function histBreak(){
+  H.hour.push('');H.day.push(H.day.length?H.day[H.day.length-1]:simDay);
+  ['pv','wind','load','ely','th','curtail','cumH','cumN','util'].forEach(k=>H[k].push(null));
+}
+function histPush(j){
+  const d=j.day||simDay;
+  if(H.hour.length&&d!==H.day[H.day.length-1])histBreak();   // 日界断线
+  H.hour.push(hm(j.hour));H.day.push(d);
+  H.pv.push(j.pv);H.wind.push(j.wind);H.load.push(j.load);
+  H.ely.push(j.ely_mw);H.th.push(j.th_mw);H.curtail.push(j.curtail_mw);
+  H.cumH.push(j.cum_h2_t);H.cumN.push(j.cum_nh3_t);H.util.push(+(j.utilization*100).toFixed(2));
+  if(H.hour.length>HIST_MAX)['hour','day','pv','wind','load','ely','th','curtail','cumH','cumN','util']
+    .forEach(k=>H[k].shift());
+}
 
 function wsSend(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o));}
 
@@ -616,12 +632,11 @@ function connect(){
   };
 }
 function dayReset(){
+  /* 仅复位"当日"口径的量：KPI 补间基线、日进度、事件状态。
+     曲线历史(H)与图表基础结构保持不动 → 日界只断线，不清屏 */
   lastStep=null;curtOn=false;
-  series={hour:[],pv:[],wind:[],load:[],ely:[],th:[],curtail:[],cumH:[],cumN:[],util:[]};
   ['kRev','kUtil','kH2','kNh3'].forEach(id=>{const el=document.getElementById(id);if(el)el._v=0;});
   $('#dayProg').style.width='0%';$('#dayStep').textContent='0/96';
-  Object.values(CHARTS).forEach(c=>{c._base=false;});
-  renderTrend();
 }
 $$('#speedSeg button').forEach(b=>b.onclick=()=>{
   $$('#speedSeg button').forEach(x=>x.classList.remove('on'));
@@ -642,10 +657,7 @@ $('#stratSel').onchange=()=>wsSend({cmd:'strategy',strategy:$('#stratSel').value
 
 /* ---------- 每时步处理（silent=true 用于历史回放：不触发事件、不逐帧渲染） ---------- */
 function ingestStep(j,silent){
-  const D=series;
-  D.hour.push(j.hour);D.pv.push(j.pv);D.wind.push(j.wind);D.load.push(j.load);
-  D.ely.push(j.ely_mw);D.th.push(j.th_mw);D.curtail.push(j.curtail_mw);
-  D.cumH.push(j.cum_h2_t);D.cumN.push(j.cum_nh3_t);D.util.push(+(j.utilization*100).toFixed(2));
+  histPush(j);
 
   /* KPI（连续量数字补间，瞬时量直读） */
   $('#kCmd').innerHTML=j.action_level+'<span class="u">档</span>';
@@ -709,14 +721,14 @@ function ingestStep(j,silent){
 
 /* ---------- 总览滚动图（基础结构一次构建，之后仅合并数据，避免整图重绘） ---------- */
 function renderOv(){
-  const W=48,D=series,sl=a=>a.slice(-W);
-  const c=chart('ovChart'),xd=sl(D.hour).map(hm);
+  const W=48,sl=a=>a.slice(-W);
+  const c=chart('ovChart'),xd=sl(H.hour);
   const ser=[
-    {name:'光伏',type:'line',showSymbol:false,data:sl(D.pv),itemStyle:{color:C.pv},areaStyle:{opacity:.1}},
-    {name:'风电',type:'line',showSymbol:false,data:sl(D.wind),itemStyle:{color:C.wind},areaStyle:{opacity:.1}},
-    {name:'负荷',type:'line',showSymbol:false,data:sl(D.load),itemStyle:{color:C.load},lineStyle:{width:2}},
-    {name:'电解槽',type:'line',showSymbol:false,data:sl(D.ely),itemStyle:{color:C.ely},lineStyle:{width:3}},
-    {name:'火电',type:'line',showSymbol:false,data:sl(D.th),itemStyle:{color:C.th},lineStyle:{type:'dashed'}},
+    {name:'光伏',type:'line',showSymbol:false,data:sl(H.pv),itemStyle:{color:C.pv},areaStyle:{opacity:.1}},
+    {name:'风电',type:'line',showSymbol:false,data:sl(H.wind),itemStyle:{color:C.wind},areaStyle:{opacity:.1}},
+    {name:'负荷',type:'line',showSymbol:false,data:sl(H.load),itemStyle:{color:C.load},lineStyle:{width:2}},
+    {name:'电解槽',type:'line',showSymbol:false,data:sl(H.ely),itemStyle:{color:C.ely},lineStyle:{width:3}},
+    {name:'火电',type:'line',showSymbol:false,data:sl(H.th),itemStyle:{color:C.th},lineStyle:{type:'dashed'}},
   ];
   if(!c._base){
     c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},
@@ -729,9 +741,10 @@ function renderOv(){
   }
 }
 
-/* ---------- 趋势页（同上：markLine 等静态要素只在首次构建，数据走增量合并） ---------- */
+/* ---------- 趋势页（同上：markLine 等静态要素只在首次构建，数据走增量合并；
+   数据源为跨日滚动历史 H，日界处断线不清屏） ---------- */
 function renderTrend(){
-  const D=series,xd=D.hour.map(hm);
+  const D=H,xd=D.hour;   // hour 已存为 hm() 格式字符串，日界为空串占位
   const cP=chart('trPower');
   if(!cP._base){
     cP.setOption({

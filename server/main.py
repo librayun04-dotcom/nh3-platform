@@ -680,7 +680,8 @@ class SimSession:
 # （页面刷新/关闭不影响运行；新接入者立即同步当日历史）
 # ============================================================
 class GlobalSimEngine:
-    MAX_KEEP = 200   # 新订阅者回放的最大历史时步数
+    MAX_KEEP = 200      # 新订阅者回放的最大历史时步数
+    MAX_TOTAL = 96 * 5  # 跨日滚动历史上限（最近5个运行日）
 
     def __init__(self):
         self.session: SimSession | None = None
@@ -689,7 +690,7 @@ class GlobalSimEngine:
         self.model_name: str | None = None
         self.interval_ms = 1500
         self.paused = False
-        self.today_steps: List[dict] = []
+        self.keep: List[dict] = []   # 跨日滚动历史：日切换不清空，供曲线连续展示
         self._subs: set = set()
 
     def start_day(self):
@@ -697,7 +698,6 @@ class GlobalSimEngine:
         seed = (int(time.time()) + self.day * 7919) % 99991
         self.model_name = self.model_name or resolve_default_model()
         self.session = SimSession(self.model_name, seed, self.strategy)
-        self.today_steps = []
 
     def attach(self, ws):
         self._subs.add(ws)
@@ -730,11 +730,16 @@ class GlobalSimEngine:
                                           "strategy": self.strategy})
                 else:
                     out = self.session.step()
-                    self.today_steps.append(out)
-                    await self.broadcast({"type": "step", "data": out})
                     if out.get("done"):
+                        await self.broadcast({"type": "step", "data": out})
                         await self.broadcast({"type": "day_done", "day": self.day,
                                               "summary": out["summary"]})
+                    else:
+                        out["day"] = self.day
+                        self.keep.append(out)
+                        if len(self.keep) > GlobalSimEngine.MAX_TOTAL:
+                            del self.keep[:len(self.keep) - GlobalSimEngine.MAX_TOTAL]
+                        await self.broadcast({"type": "step", "data": out})
                 await asyncio.sleep(max(0.05, self.interval_ms / 1000))
             except Exception:
                 traceback.print_exc()
@@ -756,7 +761,7 @@ async def ws_simulate(ws: WebSocket):
         await ws.send_json({
             "type": "hello", "day": ENGINE.day, "strategy": ENGINE.strategy,
             "interval_ms": ENGINE.interval_ms, "model": ENGINE.model_name,
-            "history": ENGINE.today_steps[-GlobalSimEngine.MAX_KEEP:]})
+            "history": ENGINE.keep[-GlobalSimEngine.MAX_KEEP:]})
         while True:
             msg = await ws.receive_json()
             cmd = msg.get("cmd")
