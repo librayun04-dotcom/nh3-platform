@@ -123,10 +123,10 @@ def load_agent(model_name: str):
     return agent
 
 
-def _single_action(agent, state: np.ndarray) -> int:
-    """单状态贪心推理 → 离散档位索引"""
+def _single_action(agent, state: np.ndarray, mask: np.ndarray = None) -> int:
+    """单状态贪心推理 → 离散档位索引（mask 与 src/evaluate.py 评估口径一致）"""
     a, _, _ = agent.select_action_batch(np.asarray(state, dtype=np.float32)[None, ...],
-                                        greedy=True, mask=None)
+                                        greedy=True, mask=mask)
     return int(a[0])
 
 
@@ -221,7 +221,8 @@ def run_dispatch(model_name: str, curve: dict) -> dict:
     steps = []
     t_idx = 0
     while True:
-        idx = _single_action(agent, s)
+        mask = env.action_mask()[None, :] if getattr(cfg, "ACTION_MASK", False) else None
+        idx = _single_action(agent, s, mask)
         power = float(agent.action_to_power(np.array([idx]))[0])
         s2, r, done, info = env.step(np.array([power], dtype=np.float32))
         i = t_idx % cfg.SIM_STEPS
@@ -540,11 +541,14 @@ class SimSession:
         self.obs = self.env._state()
         self.done = False
         self.t = 0
+        self._ren_sofar = 0.0   # 当日已过时步新能源电量（MWh），用于累计利用率
 
     def step(self) -> dict:
         if self.done:
             return {"done": True}
-        idx = _single_action(self.agent, self.obs)
+        # 动作掩码与训练/评估口径一致（方案H：峰时无过剩功率禁止高档位）
+        mask = self.env.action_mask()[None, :] if getattr(cfg, "ACTION_MASK", False) else None
+        idx = _single_action(self.agent, self.obs, mask)
         power = float(self.agent.action_to_power(np.array([idx]))[0])
         ns, r, done, info = self.env.step(np.array([power], dtype=np.float32))
         self.t += 1
@@ -552,7 +556,11 @@ class SimSession:
         e = self.env
         i = (self.t - 1) % cfg.SIM_STEPS
         ren = e.data["pv"][i] + e.data["wind"][i]
-        used = max(ren - max(0.0, ren - e.data["load"][i] - e.ely.power), 1e-9)
+        # 弃电/利用率均取环境真值：curtail 含火电最小技术出力顶托，
+        # utilization 为当日累计口径（与 summary.renewable_utilization 一致）
+        curtail_mw = float(info.get("curtail_mw", 0.0))
+        self._ren_sofar += ren * cfg.DT_HOURS
+        util_cum = 1.0 - e.curtail_mwh / self._ren_sofar if self._ren_sofar > 1e-9 else 1.0
         out = {
             "done": False,
             "t": self.t - 1, "hour": round(i * 0.25, 2),
@@ -562,12 +570,12 @@ class SimSession:
             "load": round(float(e.data["load"][i]), 1),
             "ely_mw": round(e.ely.power, 1),
             "th_mw": round(e.thermal.total_power(), 1),
-            "curtail_mw": round(max(0.0, ren - e.data["load"][i] - e.ely.power), 1),
+            "curtail_mw": round(curtail_mw, 1),
             "step_reward_wan": round(r / self.agent.reward_scale, 3),
             "cum_reward_wan": round(e.total_reward / self.agent.reward_scale, 2),
             "cum_h2_t": round(e.ely.h2_produced_kg / 1000, 3),
             "cum_nh3_t": round(e.ammonia.nh3_produced_t, 3),
-            "utilization": round(min(1.0, used / max(ren, 1e-9)), 4),
+            "utilization": round(min(1.0, max(0.0, util_cum)), 4),
         }
         if self.done:
             out["done"] = True

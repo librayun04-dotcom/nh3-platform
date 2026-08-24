@@ -194,7 +194,7 @@ tbody tr:hover td{background:#101d38}
     <div class="kpis">
       <div class="kpi" style="--kc:var(--cyan)"><div class="l">当前 AGC 指令</div><div class="v mono" id="kCmd">--<span class="u">档</span></div></div>
       <div class="kpi" style="--kc:var(--green)"><div class="l">当日综合收益</div><div class="v mono" id="kRev">--<span class="u">万元</span></div></div>
-      <div class="kpi" style="--kc:var(--blue)"><div class="l">新能源利用率</div><div class="v mono" id="kUtil">--<span class="u">%</span></div></div>
+      <div class="kpi" style="--kc:var(--blue)"><div class="l">新能源利用率（日累计）</div><div class="v mono" id="kUtil">--<span class="u">%</span></div></div>
       <div class="kpi" style="--kc:var(--purple)"><div class="l">累计产氢</div><div class="v mono" id="kH2">--<span class="u">t</span></div></div>
       <div class="kpi" style="--kc:var(--green)"><div class="l">累计产氨</div><div class="v mono" id="kNh3">--<span class="u">t</span></div></div>
       <div class="kpi" style="--kc:var(--orange)"><div class="l">瞬时弃电</div><div class="v mono" id="kCurt">--<span class="u">MW</span></div></div>
@@ -612,7 +612,7 @@ function renderTrend(){
     grid:{left:46,right:20,top:30,bottom:26},
     xAxis:axisX(D.hour.map(hm),11),
     yAxis:{type:'value',min:60,max:100,name:'%',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT},
-    series:[{name:'实时利用率',type:'line',showSymbol:false,data:D.util,
+    series:[{name:'当日累计利用率',type:'line',showSymbol:false,data:D.util,
       itemStyle:{color:'#2fd571'},lineStyle:{width:2},
       markLine:{silent:true,symbol:'none',label:{color:'#f5c542',formatter:'考核线 90%'},
         lineStyle:{color:'#f5c542',type:'dashed'},data:[{yAxis:90}]}}]},true);
