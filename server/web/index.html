@@ -784,7 +784,8 @@ function renderTrend(){
       yAxis:{type:'value',min:60,max:100,name:'%',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT},
       series:[{name:'当日累计利用率',type:'line',showSymbol:false,data:D.util,
         itemStyle:{color:'#16a34a'},lineStyle:{width:2},
-        markLine:{silent:true,symbol:'none',label:{color:'#d97706',formatter:'考核线 90%'},
+        markLine:{silent:true,symbol:'none',
+          label:{color:'#d97706',formatter:'考核线 90%',position:'insideEndTop',fontSize:11},
           lineStyle:{color:'#d97706',type:'dashed'},data:[{yAxis:90}]}}]});
     cU._base=true;
   }else{
