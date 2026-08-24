@@ -279,9 +279,9 @@ tbody tr:hover td{background:#101d38}
             <div class="mw mono"><span id="agcMw">---</span><span> / 400 MW</span></div>
             <div class="nextin">下一指令下发：<span class="mono" id="nextIn">-- s</span></div>
             <div class="seg" id="speedSeg">
-              <button data-ms="600">慢速</button>
-              <button data-ms="260" class="on">常用</button>
-              <button data-ms="90">加速</button>
+              <button data-ms="4000">慢速</button>
+              <button data-ms="1500" class="on">常用</button>
+              <button data-ms="500">快速</button>
             </div>
           </div>
         </div>
@@ -453,7 +453,7 @@ $$('#evtFilters .fbtn').forEach(b=>b.onclick=()=>{
 });
 
 /* ---------- 仿真接入（自动连续运行） ---------- */
-let ws=null,speedMs=260,simDay=1,lastStep=null,dayStart=true,curtOn=false;
+let ws=null,speedMs=1500,simDay=1,lastStep=null,dayStart=true,curtOn=false,nextAt=0;
 let series={hour:[],pv:[],wind:[],load:[],ely:[],th:[],curtail:[],cumH:[],cumN:[],util:[]};
 
 function wsSend(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o));}
@@ -476,8 +476,8 @@ function connect(){
       if(dayStart){pushEvt('info',`第 ${simDay} 运行日开始，AGC 转入自动调度`);dayStart=false;}
       return;
     }
-    if(j.type==='paused'||j.type==='reset')return;
-    if(j.done&&j.summary){onDayDone(j.summary);setTimeout(()=>wsSend({cmd:'start',interval_ms:speedMs}),1600);return;}
+    if(j.type==='paused'||j.type==='reset'||j.type==='paced')return;
+    if(j.done&&j.summary){onDayDone(j.summary);setTimeout(()=>wsSend({cmd:'start',interval_ms:speedMs}),2600);return;}
     if(j.t!==undefined)onStep(j);
   };
 }
@@ -490,9 +490,17 @@ function onDayDone(s){
 }
 $$('#speedSeg button').forEach(b=>b.onclick=()=>{
   $$('#speedSeg button').forEach(x=>x.classList.remove('on'));
-  b.classList.add('on');speedMs=+b.dataset.ms;
-  pushEvt('info',`AGC 遥测刷新周期调整为 ${speedMs} ms`);
+  b.classList.add('on');speedMs=+b.dataset.ms;nextAt=Date.now()+speedMs;
+  wsSend({cmd:'pace',interval_ms:speedMs});   // 运行中即时生效
+  pushEvt('info',`AGC 遥测刷新周期调整为 ${(speedMs/1000).toFixed(1)} s`);
 });
+/* 指令下发倒计时（实时走秒） */
+setInterval(()=>{
+  const el=$('#nextIn');if(!el)return;
+  if(!nextAt){el.textContent='-- s';return;}
+  const r=(nextAt-Date.now())/1000;
+  el.textContent=(r>0?r.toFixed(1):'0.0')+' s';
+},200);
 
 /* ---------- 每时步处理 ---------- */
 function onStep(j){
@@ -513,7 +521,7 @@ function onStep(j){
   $('#agcLevel').textContent=j.action_level;
   $('#agcMw').textContent=j.ely_mw;
   $('#cmdNo').textContent='CMD '+String(simDay).padStart(2,'0')+String(j.t+1).padStart(3,'0');
-  $('#nextIn').textContent=(speedMs/1000).toFixed(1)+' s';
+  nextAt=Date.now()+speedMs;   // 倒计时由全局走秒器刷新
 
   /* 档位变化事件 */
   if(lastStep&&j.action_level!==lastStep.lv){

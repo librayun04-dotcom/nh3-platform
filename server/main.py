@@ -629,6 +629,14 @@ async def ws_simulate(ws: WebSocket):
                 if session and auto_task is None and not session.done:
                     interval = int(msg.get("interval_ms", 150))
                     auto_task = asyncio.create_task(auto_loop(interval))
+            elif cmd == "pace":
+                # 运行中调整刷新步长：保留会话状态，仅重启自动循环
+                interval = int(msg.get("interval_ms", 150))
+                if session and not session.done:
+                    if auto_task:
+                        auto_task.cancel()
+                    auto_task = asyncio.create_task(auto_loop(interval))
+                await ws.send_json({"type": "paced", "interval_ms": interval})
             elif cmd == "step":
                 if session:
                     await ws.send_json(session.step())
