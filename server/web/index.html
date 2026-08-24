@@ -555,6 +555,10 @@ function histBreak(){
 }
 function histPush(j){
   const d=j.day||simDay;
+  /* 去重：同一 运行日:时步 只入缓冲一次（重连回放保护） */
+  const key=d+':'+j.t;
+  if(key===H._lastKey)return;
+  H._lastKey=key;H._lastT=j.t;
   if(H.hour.length&&d!==H.day[H.day.length-1])histBreak();   // 日界断线
   H.hour.push(hm(j.hour));H.day.push(d);
   H.pv.push(j.pv);H.wind.push(j.wind);H.load.push(j.load);
@@ -603,11 +607,18 @@ function connect(){
       if(m.strategy&&m.strategy!==$('#stratSel').value)$('#stratSel').value=m.strategy;
       $('#kernelTag').textContent='调度策略：'+(STRAT_LABEL[m.strategy]||'PPO 智能调度');
       const hist=(m.history||[]).filter(h=>h.t!==undefined&&!h.done);
-      hist.forEach(h=>ingestStep(h,true));
-      if(hist.length){lastStep={lv:hist[hist.length-1].action_level,mw:hist[hist.length-1].ely_mw};
-        curtOn=hist[hist.length-1].curtail_mw>30;}
+      /* 重连去重：跳过 H 中已存在的尾部（按 运行日:时步 键比对） */
+      let from=0;
+      if(H.hour.length){
+        const lastKey=H.day[H.day.length-1]+':'+H._lastT;
+        const firstNew=hist.findIndex(h=>(h.day||simDay)+':'+h.t>lastKey);
+        from=firstNew<0?hist.length:firstNew;
+      }
+      hist.slice(from).forEach(h=>ingestStep(h,true));
+      if(hist.length){const L=hist[hist.length-1];
+        lastStep={lv:L.action_level,mw:L.ely_mw};curtOn=L.curtail_mw>30;}
       pushEvt('ok','SCADA 通信链路建立，已接入全厂实时数据'+
-        (hist.length?`（同步第 ${simDay} 运行日 ${hist.length} 个时步历史）`:''));
+        (from<hist.length?`（同步 ${hist.length-from} 个时步历史）`:''));
       renderOv();renderTrend();
     }
     else if(m.type==='step'){

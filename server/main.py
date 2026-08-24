@@ -794,7 +794,9 @@ WEB_DIR = PROJECT_ROOT / "server" / "web"
 
 @app.get("/", response_class=HTMLResponse)
 def index():
-    return (WEB_DIR / "index.html").read_text(encoding="utf-8")
+    # 控制台页面禁止缓存：任何改动刷新即生效，杜绝旧版前端残留
+    return HTMLResponse((WEB_DIR / "index.html").read_text(encoding="utf-8"),
+                        headers={"Cache-Control": "no-store"})
 
 
 app.mount("/static", StaticFiles(directory=str(WEB_DIR)), name="static")
