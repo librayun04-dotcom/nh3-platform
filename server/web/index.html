@@ -95,6 +95,7 @@ select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
   border-right:1.5px solid var(--faint);border-bottom:1.5px solid var(--faint);
   transform:translateY(-70%) rotate(45deg);pointer-events:none}
 .replay-strategy{display:flex;align-items:center;gap:10px;margin-bottom:13px;font-size:12.5px;color:var(--dim)}
+.evt-meta{font-size:12px;color:var(--faint);margin-bottom:9px}
 .agc-cmd{text-align:center;padding:10px 10px 16px}
 .agc-cmd .t{font-size:12px;color:var(--dim);letter-spacing:2px}
 .agc-cmd .big{font-size:62px;font-weight:800;line-height:1.05;color:var(--blue);
@@ -154,11 +155,16 @@ thead th{position:sticky;top:0;background:#f4f7fb;color:var(--dim);font-weight:6
   padding:9px 13px;border-bottom:1px solid var(--line);z-index:1;letter-spacing:1px}
 td{padding:7px 13px;border-bottom:1px solid #eef2f7}
 tbody tr:hover td{background:#f6f9fd}
-.filters{display:flex;gap:8px;margin-bottom:12px}
+.filters{display:flex;gap:8px;margin-bottom:12px;align-items:center}
+.fsp{flex:1}
 .fbtn{background:#fff;border:1px solid var(--line);color:var(--dim);border-radius:6px;
   padding:6px 15px;font-size:12.5px;cursor:pointer;font-family:inherit;transition:.15s}
 .fbtn:hover{border-color:#b6c2d4}
 .fbtn.on{color:var(--blue);border-color:var(--blue);background:rgba(37,99,235,.06)}
+.fbtn.act{color:var(--blue)}
+.fbtn.act:hover{border-color:var(--blue);background:rgba(37,99,235,.05)}
+.fbtn.act.danger{color:var(--red)}
+.fbtn.act.danger:hover{border-color:var(--red);background:rgba(220,38,38,.05)}
 
 .cases{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
 .case-card{position:relative;background:var(--panel2);border:1px solid var(--line);border-radius:8px;
@@ -201,7 +207,7 @@ tbody tr:hover td{background:#f6f9fd}
   <div class="comm"><span class="lamp g" id="commLamp"></span><span id="commTxt">通信正常</span></div>
   <div class="shift">值别：<span id="shiftTxt">白班</span> · 运行方式：AGC 自动</div>
   <div class="sp"></div>
-  <div class="alarmchip" id="alarmChip" title="点击查看事件记录">告警 0</div>
+  <div class="alarmchip" id="alarmChip" title="点击确认全部警告并查看事件记录">警告 0</div>
   <div>
     <div class="clock mono" id="clock">--:--:--</div>
     <div class="datechip" id="dateChip">----</div>
@@ -416,12 +422,17 @@ tbody tr:hover td{background:#f6f9fd}
 
   <!-- ======== 事件记录 ======== -->
   <div class="page" id="page-events">
+    <div class="evt-meta">事件记录 · 共 <span id="evtCount" class="mono">0</span> 条（自动保留最近 600 条，越限/警告计入右上角未确认计数）</div>
     <div class="filters" id="evtFilters">
       <button class="fbtn on" data-f="all">全部</button>
       <button class="fbtn" data-f="info">事项</button>
       <button class="fbtn" data-f="ok">正常</button>
       <button class="fbtn" data-f="warn">越限</button>
-      <button class="fbtn" data-f="alarm">告警</button>
+      <button class="fbtn" data-f="alarm">警告</button>
+      <span class="fsp"></span>
+      <button class="fbtn act" id="btnAck" title="计数归零，记录保留">确认全部警告</button>
+      <button class="fbtn act danger" id="btnDelWarn" title="删除全部越限/警告记录">删除警告记录</button>
+      <button class="fbtn act" id="btnClearAll" title="清空事件列表（含静默通知）">清空全部记录</button>
     </div>
     <div class="tbl-wrap">
       <table id="evtTable">
@@ -476,39 +487,59 @@ function axisX(data,interval){return{type:'category',data,axisLabel:{...AXIS,int
 function axisY(name){return{type:'value',name,nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT};}
 const LEGEND={textStyle:{color:'#475569',fontSize:11}};
 
-/* ---------- 事件系统 ---------- */
-const EVTS=[];let alarmCnt=0,evtFilter='all';
+/* ---------- 事件系统 ----------
+   计数语义：仅 越限(warn)/警告(alarm) 计入右上角未确认警告数；
+   事项(info)/正常(ok) 为静默通知，只进事件列表不计数 */
+let EVTS=[];let unackWarn=0,evtFilter='all';
 function pushEvt(cls,txt){
   const t=new Date().toLocaleTimeString('zh-CN',{hour12:false});
   EVTS.unshift({t,cls,txt});
-  if(EVTS.length>600)EVTS.pop();
-  if(cls==='warn'||cls==='alarm')alarmCnt++;
+  if(EVTS.length>600)EVTS.splice(600);
+  if(cls==='warn'||cls==='alarm')unackWarn++;
   renderAlarm();renderMini();renderEvtTable();
 }
 function renderAlarm(){
   const c=$('#alarmChip');
-  c.textContent='告警 '+alarmCnt;
-  c.className='alarmchip'+(alarmCnt?' hot':'');
+  c.textContent='警告 '+unackWarn;
+  c.className='alarmchip'+(unackWarn?' hot':'');
 }
 function renderMini(){
   $('#evtMini').innerHTML=EVTS.slice(0,6).map(e=>
     `<div class="evt ${e.cls}"><span class="tm">${e.t}</span><span class="dot2"></span><span class="tx">${e.txt}</span></div>`).join('');
 }
 function renderEvtTable(){
-  const map={info:'事项',ok:'正常',warn:'越限',alarm:'告警'};
+  const map={info:'事项',ok:'正常',warn:'越限',alarm:'警告'};
   const rows=EVTS.filter(e=>evtFilter==='all'||e.cls===evtFilter).map(e=>
     `<tr><td class="mono">${e.t}</td>`+
     `<td><span class="evt ${e.cls}" style="border:none;padding:0"><span class="dot2"></span><span class="tx">${map[e.cls]}</span></span></td>`+
     `<td>${e.txt}</td></tr>`).join('');
   document.querySelector('#evtTable tbody').innerHTML=
     rows||'<tr><td colspan="3" style="color:var(--faint)">暂无记录</td></tr>';
+  document.querySelector('#evtCount').textContent=EVTS.length;
 }
-$$('#evtFilters .fbtn').forEach(b=>b.onclick=()=>{
-  $$('#evtFilters .fbtn').forEach(x=>x.classList.remove('on'));
+$$('#evtFilters .fbtn[data-f]').forEach(b=>b.onclick=()=>{
+  $$('#evtFilters .fbtn[data-f]').forEach(x=>x.classList.remove('on'));
   b.classList.add('on');evtFilter=b.dataset.f;renderEvtTable();
 });
-/* 点击告警徽章 → 直达事件记录页 */
-$('#alarmChip').onclick=()=>document.querySelector('.navstrip button[data-p="events"]').click();
+/* 确认：计数归零，记录保留（工业告警确认语义） */
+function ackAllWarn(){unackWarn=0;renderAlarm();toast('已确认全部警告，计数归零','ok',2200);}
+/* 删除：移除记录本身 */
+function delWarnRecords(){
+  const n=EVTS.filter(e=>e.cls==='warn'||e.cls==='alarm').length;
+  EVTS=EVTS.filter(e=>e.cls!=='warn'&&e.cls!=='alarm');
+  unackWarn=0;renderAlarm();renderMini();renderEvtTable();
+  toast(n?`已删除 ${n} 条警告记录`:'暂无警告记录可删除','ok',2400);
+}
+function clearAllRecords(){
+  const n=EVTS.length;EVTS=[];unackWarn=0;
+  renderAlarm();renderMini();renderEvtTable();
+  toast(n?`已清空全部 ${n} 条事件记录`:'事件列表本为空','info',2200);
+}
+$('#btnAck').onclick=ackAllWarn;
+$('#btnDelWarn').onclick=delWarnRecords;
+$('#btnClearAll').onclick=clearAllRecords;
+/* 点击徽章 = 一键确认 + 跳转事件页 */
+$('#alarmChip').onclick=()=>{ackAllWarn();document.querySelector('.navstrip button[data-p="events"]').click();};
 
 /* ---------- 仿真接入（自动连续运行） ---------- */
 let ws=null,speedMs=1500,simDay=1,lastStep=null,dayStart=true,curtOn=false,nextAt=0;
