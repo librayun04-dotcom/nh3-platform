@@ -242,31 +242,31 @@ tbody tr:hover td{background:#f6f9fd}
           <div class="p-h">系统单线图<span class="r">遥测刷新中 · 15 min/时步</span></div>
           <div class="p-b" style="padding:6px 10px">
             <svg class="sld" viewBox="0 0 920 400">
-              <line class="busbar" x1="120" y1="150" x2="800" y2="150"/>
+              <line class="busbar" x1="90" y1="150" x2="848" y2="150"/>
               <text x="118" y="138" style="fill:#2563eb;font-weight:700">220kV 母线</text>
 
               <rect class="blk" x="40" y="30" width="130" height="62" rx="6"/>
               <text x="105" y="53" text-anchor="middle" style="fill:#d97706">光伏电站</text>
               <text x="105" y="71" text-anchor="middle">装机 1000 MW</text>
               <text class="val" id="sldPv" x="105" y="87" text-anchor="middle" style="fill:#d97706">-- MW</text>
-              <line class="wire" x1="105" y1="92" x2="105" y2="128"/>
-              <line class="wire flow" x1="105" y1="92" x2="105" y2="128" style="stroke:#d97706"/>
-              <polygon points="105,128 100,119 110,119" fill="#d97706"/>
+              <line class="wire" x1="105" y1="92" x2="105" y2="150"/>
+              <line class="wire flow" x1="105" y1="92" x2="105" y2="150" style="stroke:#d97706"/>
+              <polygon points="105,150 100,141 110,141" fill="#d97706"/>
 
               <rect class="blk" x="215" y="30" width="130" height="62" rx="6"/>
               <text x="280" y="53" text-anchor="middle" style="fill:#16a34a">风电场</text>
               <text x="280" y="71" text-anchor="middle">装机 700 MW</text>
               <text class="val" id="sldWind" x="280" y="87" text-anchor="middle" style="fill:#16a34a">-- MW</text>
-              <line class="wire" x1="280" y1="92" x2="280" y2="128"/>
-              <line class="wire flow" x1="280" y1="92" x2="280" y2="128" style="stroke:#16a34a"/>
-              <polygon points="280,128 275,119 285,119" fill="#16a34a"/>
+              <line class="wire" x1="280" y1="92" x2="280" y2="150"/>
+              <line class="wire flow" x1="280" y1="92" x2="280" y2="150" style="stroke:#16a34a"/>
+              <polygon points="280,150 275,141 285,141" fill="#16a34a"/>
 
               <rect class="blk" x="40" y="200" width="130" height="62" rx="6"/>
               <text x="105" y="223" text-anchor="middle" style="fill:#2563eb">区域负荷</text>
               <text x="105" y="241" text-anchor="middle">峰值 800 MW</text>
               <text class="val" id="sldLoad" x="105" y="257" text-anchor="middle" style="fill:#2563eb">-- MW</text>
-              <line class="wire" x1="105" y1="172" x2="105" y2="200"/>
-              <line class="wire flow" x1="105" y1="172" x2="105" y2="200" style="stroke:#2563eb"/>
+              <line class="wire" x1="105" y1="150" x2="105" y2="192"/>
+              <line class="wire flow" x1="105" y1="150" x2="105" y2="192" style="stroke:#2563eb"/>
               <polygon points="105,200 100,191 110,191" fill="#2563eb"/>
 
               <rect class="blk" x="330" y="200" width="170" height="76" rx="6"/>
@@ -541,8 +541,11 @@ $('#btnClearAll').onclick=clearAllRecords;
 /* 点击徽章 = 一键确认 + 跳转事件页 */
 $('#alarmChip').onclick=()=>{ackAllWarn();document.querySelector('.navstrip button[data-p="events"]').click();};
 
-/* ---------- 仿真接入（自动连续运行） ---------- */
-let ws=null,speedMs=1500,simDay=1,lastStep=null,dayStart=true,curtOn=false,nextAt=0;
+/* ---------- 实时数据接入 ----------
+   后端为常驻全局引擎：页面刷新/关闭不影响运行，此处仅订阅展示。
+   协议：hello(含当日历史回放)/step/day/day_done/paced/strategy */
+let ws=null,speedMs=1500,simDay=0,lastStep=null,curtOn=false,nextAt=0;
+const STRAT_LABEL={ppo:'PPO 智能调度',curtail_first:'贪心消纳',flat:'恒定功率',no_ely:'电解槽停运'};
 let series={hour:[],pv:[],wind:[],load:[],ely:[],th:[],curtail:[],cumH:[],cumN:[],util:[]};
 
 function wsSend(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o));}
@@ -559,13 +562,15 @@ function tweenNum(id,to,dec,unit){
   })(t0);
 }
 
+function syncSpeedUI(){
+  $$('#speedSeg button').forEach(x=>x.classList.toggle('on',+x.dataset.ms===speedMs));
+}
+
 function connect(){
   ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws/simulate`);
   ws.onopen=()=>{
     $('#connBanner').style.display='none';
     $('#commLamp').className='lamp g';$('#commTxt').textContent='通信正常';
-    pushEvt('ok','SCADA 通信链路建立，AGC 策略内核投入自动方式');
-    wsSend({cmd:'start',interval_ms:speedMs,strategy:$('#stratSel').value});
   };
   ws.onclose=()=>{
     $('#connBanner').style.display='block';
@@ -575,24 +580,47 @@ function connect(){
   };
   ws.onerror=()=>{};
   ws.onmessage=e=>{
-    const j=JSON.parse(e.data);
-    if(j.type==='started'){
-      if(dayStart){pushEvt('info',`第 ${simDay} 运行日开始，AGC 转入自动调度`);dayStart=false;}
-      return;
+    const m=JSON.parse(e.data);
+    if(m.type==='hello'){
+      simDay=m.day||simDay;
+      speedMs=m.interval_ms||speedMs;syncSpeedUI();
+      if(m.strategy&&m.strategy!==$('#stratSel').value)$('#stratSel').value=m.strategy;
+      $('#kernelTag').textContent='调度策略：'+(STRAT_LABEL[m.strategy]||'PPO 智能调度');
+      const hist=(m.history||[]).filter(h=>h.t!==undefined&&!h.done);
+      hist.forEach(h=>ingestStep(h,true));
+      if(hist.length){lastStep={lv:hist[hist.length-1].action_level,mw:hist[hist.length-1].ely_mw};
+        curtOn=hist[hist.length-1].curtail_mw>30;}
+      pushEvt('ok','SCADA 通信链路建立，已接入全厂实时数据'+
+        (hist.length?`（同步第 ${simDay} 运行日 ${hist.length} 个时步历史）`:''));
+      renderOv();renderTrend();
     }
-    if(j.type==='paused'||j.type==='reset'||j.type==='paced')return;
-    if(j.type==='strategy'){toast('调度策略已切换为「'+j.label+'」','ok');return;}
-    if(j.done&&j.summary){onDayDone(j.summary);setTimeout(()=>wsSend({cmd:'start',interval_ms:speedMs,strategy:$('#stratSel').value}),2600);return;}
-    if(j.t!==undefined)onStep(j);
+    else if(m.type==='step'){
+      if(m.data&&m.data.t!==undefined&&!m.data.done)ingestStep(m.data,false);
+    }
+    else if(m.type==='day'){
+      simDay=m.day;dayReset();
+      pushEvt('info',`第 ${m.day} 运行日开始，AGC 转入自动调度`);
+    }
+    else if(m.type==='day_done'){
+      const s=m.summary||{};
+      pushEvt('ok',`第 ${m.day} 运行日结算完成：综合收益 ${s.total_reward_wan} 万元，产氢 ${s.h2_t} t，产氨 ${s.nh3_t} t，利用率 ${s.utilization_pct}%`);
+      toast(`第 ${m.day} 运行日结算完成：${s.total_reward_wan} 万元`,'ok');
+    }
+    else if(m.type==='paced'){speedMs=m.interval_ms;syncSpeedUI();}
+    else if(m.type==='strategy'){
+      toast('调度策略已切换为「'+m.label+'」','ok');
+      $('#kernelTag').textContent='调度策略：'+(STRAT_LABEL[m.strategy]||'');
+      if($('#stratSel').value!==m.strategy)$('#stratSel').value=m.strategy;
+      pushEvt('info','调度策略切换为「'+m.label+'」');
+    }
   };
 }
-function onDayDone(s){
-  pushEvt('ok',`第 ${simDay} 运行日结算完成：综合收益 ${s.total_reward_wan} 万元，产氢 ${s.h2_t} t，产氨 ${s.nh3_t} t，利用率 ${s.utilization_pct}%`);
-  toast(`第 ${simDay} 运行日结算完成：${s.total_reward_wan} 万元`,'ok');
-  simDay++;dayStart=true;curtOn=false;lastStep=null;
+function dayReset(){
+  lastStep=null;curtOn=false;
   series={hour:[],pv:[],wind:[],load:[],ely:[],th:[],curtail:[],cumH:[],cumN:[],util:[]};
   ['kRev','kUtil','kH2','kNh3'].forEach(id=>{const el=document.getElementById(id);if(el)el._v=0;});
   $('#dayProg').style.width='0%';$('#dayStep').textContent='0/96';
+  Object.values(CHARTS).forEach(c=>{c._base=false;});
   renderTrend();
 }
 $$('#speedSeg button').forEach(b=>b.onclick=()=>{
@@ -609,17 +637,11 @@ setInterval(()=>{
   el.textContent=(r>0?r.toFixed(1):'0.0')+' s';
 },200);
 
-/* 调度策略热切换 */
-const STRAT_LABEL={ppo:'PPO 智能调度',curtail_first:'贪心消纳',flat:'恒定功率',no_ely:'电解槽停运'};
-$('#stratSel').onchange=()=>{
-  const v=$('#stratSel').value;
-  wsSend({cmd:'strategy',strategy:v});
-  pushEvt('info','调度策略切换为「'+STRAT_LABEL[v]+'」');
-  $('#kernelTag').textContent='调度策略：'+STRAT_LABEL[v];
-};
+/* 调度策略热切换：仅发送指令，界面以服务端广播为准（避免双份事件/提示） */
+$('#stratSel').onchange=()=>wsSend({cmd:'strategy',strategy:$('#stratSel').value});
 
-/* ---------- 每时步处理 ---------- */
-function onStep(j){
+/* ---------- 每时步处理（silent=true 用于历史回放：不触发事件、不逐帧渲染） ---------- */
+function ingestStep(j,silent){
   const D=series;
   D.hour.push(j.hour);D.pv.push(j.pv);D.wind.push(j.wind);D.load.push(j.load);
   D.ely.push(j.ely_mw);D.th.push(j.th_mw);D.curtail.push(j.curtail_mw);
@@ -641,17 +663,19 @@ function onStep(j){
   $('#dayProg').style.width=((j.t+1)/96*100)+'%';
   $('#dayStep').textContent=(j.t+1)+'/96';
 
-  /* 档位变化事件 */
-  if(lastStep&&j.action_level!==lastStep.lv){
+  /* 档位变化事件（历史回放静默） */
+  if(!silent&&lastStep&&j.action_level!==lastStep.lv){
     const up=j.action_level>lastStep.lv;
     pushEvt('info',`AGC 指令调整：电解槽 ${lastStep.lv} 档 → ${j.action_level} 档（${j.ely_mw} MW），${up?'增':'减'}载 ${Math.abs(j.ely_mw-lastStep.mw).toFixed(0)} MW`);
   }
   lastStep={lv:j.action_level,mw:j.ely_mw};
 
-  /* 弃电起止事件 */
+  /* 弃电起止事件（历史回放静默） */
   const on=j.curtail_mw>30;
-  if(on&&!curtOn)pushEvt('warn',`出现弃电 ${j.curtail_mw.toFixed(0)} MW，电解槽按上限消纳中`);
-  if(!on&&curtOn)pushEvt('ok','弃电恢复，新能源电力全部消纳');
+  if(!silent){
+    if(on&&!curtOn)pushEvt('warn',`出现弃电 ${j.curtail_mw.toFixed(0)} MW，电解槽按上限消纳中`);
+    if(!on&&curtOn)pushEvt('ok','弃电恢复，新能源电力全部消纳');
+  }
   curtOn=on;
 
   /* 单线图 */
@@ -680,74 +704,92 @@ function onStep(j){
   $('#barNh3').style.width=Math.min(100,Math.round(pct*.85))+'%';
   $('#valNh3Rate').textContent=(j.cum_nh3_t/Math.max(.25,(j.t+1)*.25)).toFixed(2)+' t/h';
 
-  renderOv();renderTrend();
+  if(!silent){renderOv();renderTrend();}
 }
 
-/* ---------- 总览滚动图 ---------- */
+/* ---------- 总览滚动图（基础结构一次构建，之后仅合并数据，避免整图重绘） ---------- */
 function renderOv(){
   const W=48,D=series,sl=a=>a.slice(-W);
-  if(!D.hour.length)return;
-  chart('ovChart').setOption({
-    backgroundColor:'transparent',
-    tooltip:{trigger:'axis'},
-    legend:{...LEGEND,fontSize:10,top:0},
-    grid:{left:46,right:14,top:28,bottom:24},
-    xAxis:axisX(sl(D.hour).map(hm)),
-    yAxis:axisY('MW'),
-    series:[
-      {name:'光伏',type:'line',showSymbol:false,data:sl(D.pv),itemStyle:{color:C.pv},areaStyle:{opacity:.1}},
-      {name:'风电',type:'line',showSymbol:false,data:sl(D.wind),itemStyle:{color:C.wind},areaStyle:{opacity:.1}},
-      {name:'负荷',type:'line',showSymbol:false,data:sl(D.load),itemStyle:{color:C.load},lineStyle:{width:2}},
-      {name:'电解槽',type:'line',showSymbol:false,data:sl(D.ely),itemStyle:{color:C.ely},lineStyle:{width:3}},
-      {name:'火电',type:'line',showSymbol:false,data:sl(D.th),itemStyle:{color:C.th},lineStyle:{type:'dashed'}},
-    ]},true);
+  const c=chart('ovChart'),xd=sl(D.hour).map(hm);
+  const ser=[
+    {name:'光伏',type:'line',showSymbol:false,data:sl(D.pv),itemStyle:{color:C.pv},areaStyle:{opacity:.1}},
+    {name:'风电',type:'line',showSymbol:false,data:sl(D.wind),itemStyle:{color:C.wind},areaStyle:{opacity:.1}},
+    {name:'负荷',type:'line',showSymbol:false,data:sl(D.load),itemStyle:{color:C.load},lineStyle:{width:2}},
+    {name:'电解槽',type:'line',showSymbol:false,data:sl(D.ely),itemStyle:{color:C.ely},lineStyle:{width:3}},
+    {name:'火电',type:'line',showSymbol:false,data:sl(D.th),itemStyle:{color:C.th},lineStyle:{type:'dashed'}},
+  ];
+  if(!c._base){
+    c.setOption({backgroundColor:'transparent',tooltip:{trigger:'axis'},
+      legend:{...LEGEND,fontSize:10,top:0},
+      grid:{left:46,right:14,top:28,bottom:24},
+      xAxis:axisX(xd),yAxis:axisY('MW'),series:ser});
+    c._base=true;
+  }else{
+    c.setOption({xAxis:{data:xd},series:ser.map(s=>({data:s.data}))});
+  }
 }
 
-/* ---------- 趋势页 ---------- */
+/* ---------- 趋势页（同上：markLine 等静态要素只在首次构建，数据走增量合并） ---------- */
 function renderTrend(){
-  const D=series;
-  if(!D.hour.length){
-    chart('trPower').setOption({backgroundColor:'transparent',graphic:[{type:'text',
-      left:'center',top:'middle',style:{text:'等待当前运行日数据…',fill:'#8898ae',fontSize:14}}]},true);
-    chart('trProd').clear();chart('trUtil').clear();
-    return;
+  const D=series,xd=D.hour.map(hm);
+  const cP=chart('trPower');
+  if(!cP._base){
+    cP.setOption({
+      backgroundColor:'transparent',
+      tooltip:{trigger:'axis'},legend:{...LEGEND,top:0},
+      grid:{left:50,right:16,top:32,bottom:34},
+      xAxis:axisX(xd,11),
+      yAxis:axisY('MW'),
+      dataZoom:[{type:'inside'},{type:'slider',height:16,bottom:4,borderColor:'#c3ced9'}],
+      series:[
+        {name:'光伏',type:'line',smooth:true,showSymbol:false,data:D.pv,itemStyle:{color:C.pv},areaStyle:{opacity:.08}},
+        {name:'风电',type:'line',smooth:true,showSymbol:false,data:D.wind,itemStyle:{color:C.wind},areaStyle:{opacity:.08}},
+        {name:'负荷',type:'line',smooth:true,showSymbol:false,data:D.load,itemStyle:{color:C.load},lineStyle:{width:2}},
+        {name:'电解槽',type:'line',smooth:true,showSymbol:false,data:D.ely,itemStyle:{color:C.ely},lineStyle:{width:3}},
+        {name:'火电',type:'line',smooth:true,showSymbol:false,data:D.th,itemStyle:{color:C.th},lineStyle:{type:'dashed'}},
+        {name:'弃电',type:'bar',data:D.curtail,itemStyle:{color:'rgba(234,88,12,.35)'},barWidth:3},
+      ]});
+    cP._base=true;
+  }else{
+    cP.setOption({xAxis:{data:xd},
+      series:[{data:D.pv},{data:D.wind},{data:D.load},{data:D.ely},{data:D.th},{data:D.curtail}]});
   }
-  chart('trPower').setOption({
-    backgroundColor:'transparent',
-    tooltip:{trigger:'axis'},legend:{...LEGEND,top:0},
-    grid:{left:50,right:16,top:32,bottom:34},
-    xAxis:axisX(D.hour.map(hm),11),
-    yAxis:axisY('MW'),
-    dataZoom:[{type:'inside'},{type:'slider',height:16,bottom:4,borderColor:'#c3ced9'}],
-    series:[
-      {name:'光伏',type:'line',smooth:true,showSymbol:false,data:D.pv,itemStyle:{color:C.pv},areaStyle:{opacity:.08}},
-      {name:'风电',type:'line',smooth:true,showSymbol:false,data:D.wind,itemStyle:{color:C.wind},areaStyle:{opacity:.08}},
-      {name:'负荷',type:'line',smooth:true,showSymbol:false,data:D.load,itemStyle:{color:C.load},lineStyle:{width:2}},
-      {name:'电解槽',type:'line',smooth:true,showSymbol:false,data:D.ely,itemStyle:{color:C.ely},lineStyle:{width:3}},
-      {name:'火电',type:'line',smooth:true,showSymbol:false,data:D.th,itemStyle:{color:C.th},lineStyle:{type:'dashed'}},
-      {name:'弃电',type:'bar',data:D.curtail,itemStyle:{color:'rgba(234,88,12,.35)'},barWidth:3},
-    ]},true);
-  chart('trProd').setOption({
-    backgroundColor:'transparent',
-    tooltip:{trigger:'axis'},legend:{...LEGEND,top:0},
-    grid:{left:46,right:46,top:30,bottom:26},
-    xAxis:axisX(D.hour.map(hm),11),
-    yAxis:[
-      {type:'value',name:'氢 t',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT},
-      {type:'value',name:'氨 t',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:{show:false}}],
-    series:[
-      {name:'累计产氢',type:'line',showSymbol:false,data:D.cumH,itemStyle:{color:'#0891b2'},areaStyle:{opacity:.08}},
-      {name:'累计产氨',type:'line',yAxisIndex:1,showSymbol:false,data:D.cumN,itemStyle:{color:'#16a34a'}}]},true);
-  chart('trUtil').setOption({
-    backgroundColor:'transparent',
-    tooltip:{trigger:'axis'},legend:{show:false},
-    grid:{left:46,right:20,top:30,bottom:26},
-    xAxis:axisX(D.hour.map(hm),11),
-    yAxis:{type:'value',min:60,max:100,name:'%',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT},
-    series:[{name:'当日累计利用率',type:'line',showSymbol:false,data:D.util,
-      itemStyle:{color:'#16a34a'},lineStyle:{width:2},
-      markLine:{silent:true,symbol:'none',label:{color:'#d97706',formatter:'考核线 90%'},
-        lineStyle:{color:'#d97706',type:'dashed'},data:[{yAxis:90}]}}]},true);
+
+  const cH=chart('trProd');
+  if(!cH._base){
+    cH.setOption({
+      backgroundColor:'transparent',
+      tooltip:{trigger:'axis'},legend:{...LEGEND,top:0},
+      grid:{left:46,right:46,top:30,bottom:26},
+      xAxis:axisX(xd,11),
+      yAxis:[
+        {type:'value',name:'氢 t',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT},
+        {type:'value',name:'氨 t',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:{show:false}}],
+      series:[
+        {name:'累计产氢',type:'line',showSymbol:false,data:D.cumH,itemStyle:{color:'#0891b2'},areaStyle:{opacity:.08}},
+        {name:'累计产氨',type:'line',yAxisIndex:1,showSymbol:false,data:D.cumN,itemStyle:{color:'#16a34a'}}]});
+    cH._base=true;
+  }else{
+    cH.setOption({xAxis:{data:xd},series:[{data:D.cumH},{data:D.cumN}]});
+  }
+
+  /* 考核线 90% 属于基础结构：仅首次绘制，此后只合并数据，不再重画 */
+  const cU=chart('trUtil');
+  if(!cU._base){
+    cU.setOption({
+      backgroundColor:'transparent',
+      tooltip:{trigger:'axis'},legend:{show:false},
+      grid:{left:46,right:20,top:30,bottom:26},
+      xAxis:axisX(xd,11),
+      yAxis:{type:'value',min:60,max:100,name:'%',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT},
+      series:[{name:'当日累计利用率',type:'line',showSymbol:false,data:D.util,
+        itemStyle:{color:'#16a34a'},lineStyle:{width:2},
+        markLine:{silent:true,symbol:'none',label:{color:'#d97706',formatter:'考核线 90%'},
+          lineStyle:{color:'#d97706',type:'dashed'},data:[{yAxis:90}]}}]});
+    cU._base=true;
+  }else{
+    cU.setOption({xAxis:{data:xd},series:[{data:D.util}]});
+  }
 }
 
 /* ---------- 典型日复盘 ---------- */

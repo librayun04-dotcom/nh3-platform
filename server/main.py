@@ -675,88 +675,110 @@ class SimSession:
         return out
 
 
+# ============================================================
+# 全厂共享仿真引擎：后台常驻连续运行，前端仅作为订阅展示端
+# （页面刷新/关闭不影响运行；新接入者立即同步当日历史）
+# ============================================================
+class GlobalSimEngine:
+    MAX_KEEP = 200   # 新订阅者回放的最大历史时步数
+
+    def __init__(self):
+        self.session: SimSession | None = None
+        self.day = 0
+        self.strategy = "ppo"
+        self.model_name: str | None = None
+        self.interval_ms = 1500
+        self.paused = False
+        self.today_steps: List[dict] = []
+        self._subs: set = set()
+
+    def start_day(self):
+        self.day += 1
+        seed = (int(time.time()) + self.day * 7919) % 99991
+        self.model_name = self.model_name or resolve_default_model()
+        self.session = SimSession(self.model_name, seed, self.strategy)
+        self.today_steps = []
+
+    def attach(self, ws):
+        self._subs.add(ws)
+
+    def detach(self, ws):
+        self._subs.discard(ws)
+
+    async def broadcast(self, obj: dict):
+        dead = []
+        for ws in list(self._subs):
+            try:
+                await ws.send_json(obj)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.detach(ws)
+
+    async def run(self):
+        """常驻主循环：步进 → 广播；日终自动结算并进入下一运行日"""
+        while True:
+            try:
+                if self.session is None:
+                    self.start_day()
+                    await self.broadcast({"type": "day", "day": self.day,
+                                          "strategy": self.strategy})
+                elif self.session.done:
+                    await asyncio.sleep(2.5)
+                    self.start_day()
+                    await self.broadcast({"type": "day", "day": self.day,
+                                          "strategy": self.strategy})
+                else:
+                    out = self.session.step()
+                    self.today_steps.append(out)
+                    await self.broadcast({"type": "step", "data": out})
+                    if out.get("done"):
+                        await self.broadcast({"type": "day_done", "day": self.day,
+                                              "summary": out["summary"]})
+                await asyncio.sleep(max(0.05, self.interval_ms / 1000))
+            except Exception:
+                traceback.print_exc()
+                await asyncio.sleep(2.0)
+
+
+ENGINE = GlobalSimEngine()
+
+
 @app.websocket("/ws/simulate")
 async def ws_simulate(ws: WebSocket):
-    """协议：
-       ← {"cmd":"start","model":"..","seed":3,"interval_ms":150} | pause | resume | step | reset | stop
-       → SimSession.step() 输出 + {"type":"started|paused|reset"}
+    """订阅端协议：
+       ← {cmd:"pace"|"strategy"}（作用于全局引擎）；start/step/reset 已废弃（引擎常驻）
+       → hello(含当日历史回放) / step / day / day_done / paced / strategy
     """
     await ws.accept()
-    session: SimSession | None = None
-    auto_task = None
-    strat = "ppo"   # 连接级当前策略：新会话默认沿用
-
-    async def auto_loop(interval_ms: int):
-        try:
-            while session and not session.done:
-                await ws.send_json(session.step())
-                await asyncio.sleep(max(0.02, interval_ms / 1000))
-            if session and session.done:
-                await ws.send_json(session.step())   # 带 summary 的终帧
-        except Exception:
-            pass
-
+    ENGINE.attach(ws)
     try:
+        await ws.send_json({
+            "type": "hello", "day": ENGINE.day, "strategy": ENGINE.strategy,
+            "interval_ms": ENGINE.interval_ms, "model": ENGINE.model_name,
+            "history": ENGINE.today_steps[-GlobalSimEngine.MAX_KEEP:]})
         while True:
             msg = await ws.receive_json()
             cmd = msg.get("cmd")
-            if cmd == "start":
-                if auto_task:
-                    auto_task.cancel()
-                model = msg.get("model") or resolve_default_model()
-                # 未显式给种子时按时间生成 → 连续运行期间每日场景不同
-                raw_seed = msg.get("seed")
-                seed = int(raw_seed) if raw_seed is not None else int(time.time()) % 99991
-                if msg.get("strategy") in STRATEGIES:
-                    strat = msg["strategy"]
-                session = SimSession(model, seed, strat)
-                interval = int(msg.get("interval_ms", 150))
-                auto_task = asyncio.create_task(auto_loop(interval))
-                await ws.send_json({"type": "started", "model": model,
-                                    "strategy": strat, "interval_ms": interval})
+            if cmd == "pace":
+                ENGINE.interval_ms = int(msg.get("interval_ms", 1500))
+                await ENGINE.broadcast({"type": "paced",
+                                        "interval_ms": ENGINE.interval_ms})
             elif cmd == "strategy":
-                # 运行中热切换调度策略：保留环境状态与当日累计量
                 req = msg.get("strategy")
-                if req not in STRATEGIES:
-                    await ws.send_json({"type": "strategy", "error": f"未知策略 {req}"})
-                else:
-                    strat = req
-                    if session is not None and not session.done:
-                        session.strategy = req
-                    await ws.send_json({"type": "strategy", "strategy": req,
-                                        "label": STRATEGIES[req]["label"]})
-            elif cmd == "pause":
-                if auto_task:
-                    auto_task.cancel(); auto_task = None
-                await ws.send_json({"type": "paused"})
-            elif cmd == "resume":
-                if session and auto_task is None and not session.done:
-                    interval = int(msg.get("interval_ms", 150))
-                    auto_task = asyncio.create_task(auto_loop(interval))
-            elif cmd == "pace":
-                # 运行中调整刷新步长：保留会话状态，仅重启自动循环
-                interval = int(msg.get("interval_ms", 150))
-                if session and not session.done:
-                    if auto_task:
-                        auto_task.cancel()
-                    auto_task = asyncio.create_task(auto_loop(interval))
-                await ws.send_json({"type": "paced", "interval_ms": interval})
-            elif cmd == "step":
-                if session:
-                    await ws.send_json(session.step())
-            elif cmd == "reset":
-                if auto_task:
-                    auto_task.cancel(); auto_task = None
-                session = SimSession(resolve_default_model(),
-                                     int(msg.get("seed", int(time.time()) % 99991)))
-                await ws.send_json({"type": "reset"})
+                if req in STRATEGIES:
+                    ENGINE.strategy = req
+                    if ENGINE.session is not None and not ENGINE.session.done:
+                        ENGINE.session.strategy = req
+                    await ENGINE.broadcast({"type": "strategy", "strategy": req,
+                                            "label": STRATEGIES[req]["label"]})
             elif cmd == "stop":
                 break
+            # start/pause/resume/step/reset：兼容字段，忽略——引擎不受单客户端控制
     except WebSocketDisconnect:
         pass
     finally:
-        if auto_task:
-            auto_task.cancel()
+        ENGINE.detach(ws)
 
 
 # ============================================================
@@ -774,10 +796,10 @@ app.mount("/static", StaticFiles(directory=str(WEB_DIR)), name="static")
 
 
 @app.on_event("startup")
-def startup():
+async def startup():
     scan_models()
-    dev = _torch_device()
-    print(f"[platform] 已注册 {len(MODEL_REGISTRY)} 个模型 | 设备: {dev}")
+    asyncio.create_task(ENGINE.run())   # 全厂仿真引擎随服务常驻启动
+    print(f"[platform] 已注册 {len(MODEL_REGISTRY)} 个模型 | 调度引擎已投运")
     print("[platform] 打开 http://127.0.0.1:8000 进入调度平台")
 
 
