@@ -3,370 +3,378 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>氨电联产 AGC 智能调度平台</title>
+<title>氨电联产 AGC 调度控制系统</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
 <style>
 :root{
-  --bg:#f6f8fa; --panel:#ffffff; --line:#e4e9f0; --line-strong:#d5dce5;
-  --primary:#2563eb; --primary-dark:#1d4ed8; --primary-weak:#eff6ff;
-  --text:#0f172a; --dim:#64748b; --faint:#94a3b8;
-  --green:#16a34a; --green-weak:#dcfce7; --orange:#ea580c;
-  --red:#dc2626; --purple:#7c3aed; --cyan:#0891b2;
-  --radius:12px; --shadow:0 1px 2px rgba(15,23,42,.05);
+  --bg:#070d1a; --panel:#0e1830; --panel2:#111f3a; --line:#1d2b47;
+  --txt:#dbe7ff; --dim:#7f92b8; --faint:#55688c;
+  --cyan:#22d3ee; --blue:#4da3ff; --green:#2fd571; --yellow:#f5c542;
+  --red:#ff5d6c; --orange:#ff9f43; --purple:#a78bfa;
 }
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:var(--bg);color:var(--text);font-family:"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;font-size:14px}
+body{background:var(--bg);color:var(--txt);font-size:13.5px;
+  font-family:"Microsoft YaHei","PingFang SC","Segoe UI",sans-serif;overflow-x:hidden}
+.mono{font-family:Consolas,"Courier New",monospace;font-variant-numeric:tabular-nums}
 
-/* ============ 顶部导航（Stripe 风） ============ */
-.topnav{position:sticky;top:0;z-index:30;background:rgba(255,255,255,.92);
-  backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
-.topnav-in{max-width:1280px;margin:0 auto;display:flex;align-items:center;gap:26px;
-  padding:0 28px;height:60px}
-.brand{display:flex;align-items:center;gap:10px;flex:none}
-.brand-mark{width:31px;height:31px;border-radius:9px;flex:none;
-  background:linear-gradient(135deg,#2563eb,#0891b2);
-  display:flex;align-items:center;justify-content:center}
-.brand-mark svg{width:18px;height:18px}
-.brand .t1{font-size:14.5px;font-weight:700;line-height:1.2;white-space:nowrap}
-.brand .t2{font-size:10px;color:var(--faint);letter-spacing:1.4px}
+/* ================= 系统状态栏 ================= */
+.sysbar{position:sticky;top:0;z-index:40;height:52px;display:flex;align-items:center;gap:22px;
+  padding:0 22px;background:linear-gradient(180deg,#0c1730,#0a1326);border-bottom:1px solid var(--line)}
+.sysbar .brand{display:flex;align-items:center;gap:10px}
+.brand-mark{width:30px;height:30px;border-radius:7px;background:linear-gradient(135deg,#2563eb,#0891b2);
+  display:flex;align-items:center;justify-content:center;flex:none}
+.brand-mark svg{width:17px;height:17px}
+.brand b{font-size:15px;letter-spacing:1px;display:block;line-height:1.25}
+.brand i{font-style:normal;font-size:10px;color:var(--faint);letter-spacing:1.6px}
 
-.nav-tabs{display:flex;gap:4px;height:100%}
-.tab{background:none;border:none;cursor:pointer;font-family:inherit;font-size:13.5px;
-  color:var(--dim);padding:0 15px;height:100%;position:relative;transition:color .15s}
-.tab:hover{color:var(--text)}
-.tab.active{color:var(--primary);font-weight:600}
-.tab.active::after{content:'';position:absolute;left:13px;right:13px;bottom:-1px;height:2.5px;
-  border-radius:3px 3px 0 0;background:var(--primary)}
+.comm{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--dim)}
+.lamp{width:9px;height:9px;border-radius:50%;flex:none;display:inline-block}
+.lamp.g{background:var(--green);box-shadow:0 0 8px var(--green)}
+.lamp.y{background:var(--yellow);box-shadow:0 0 8px var(--yellow)}
+.lamp.r{background:var(--red);box-shadow:0 0 8px var(--red)}
 
-.model-box{margin-left:auto;display:flex;align-items:center;gap:9px;flex:none}
-.model-box .lb{font-size:12px;color:var(--dim);white-space:nowrap}
-.select-wrap{position:relative}
-select{appearance:none;-webkit-appearance:none;background:#fff;border:1px solid #cbd5e1;
-  border-radius:8px;color:var(--text);padding:7px 32px 7px 11px;font-size:12.5px;
-  max-width:300px;min-width:210px;cursor:pointer;outline:none;font-family:inherit;transition:.15s}
-select:hover{border-color:#94a3b8}
-select:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
-.select-wrap::after{content:'';position:absolute;right:12px;top:50%;width:7px;height:7px;
-  border-right:1.6px solid var(--faint);border-bottom:1.6px solid var(--faint);
-  transform:translateY(-70%) rotate(45deg);pointer-events:none}
+.sysbar .sp{flex:1}
+.clock{font-size:20px;font-weight:700;color:var(--cyan);letter-spacing:1px;text-align:right}
+.datechip{font-size:11.5px;color:var(--dim);text-align:right}
+.shift{font-size:11.5px;color:var(--dim);border:1px solid var(--line);border-radius:6px;padding:4px 11px}
+.alarmchip{display:flex;align-items:center;gap:7px;font-size:12px;border-radius:6px;padding:4px 12px;
+  background:rgba(47,213,113,.07);border:1px solid rgba(47,213,113,.35);color:var(--green)}
+.alarmchip.hot{background:rgba(255,93,108,.08);border-color:rgba(255,93,108,.35);color:var(--red)}
 
-/* ============ 渐变横幅 ============ */
-.hero-wrap{max-width:1280px;margin:20px auto 0;padding:0 28px}
-.hero{position:relative;overflow:hidden;border-radius:14px;color:#fff;
-  padding:26px 32px;background:linear-gradient(120deg,#1e3a8a 0%,#2563eb 52%,#0891b2 100%)}
-.hero::before,.hero::after{content:'';position:absolute;border-radius:50%;pointer-events:none}
-.hero::before{width:340px;height:340px;right:-90px;top:-190px;
-  background:radial-gradient(circle,rgba(125,211,252,.35),transparent 65%)}
-.hero::after{width:260px;height:260px;left:34%;bottom:-170px;
-  background:radial-gradient(circle,rgba(255,255,255,.14),transparent 62%)}
-.hero h1{font-size:21px;font-weight:700;letter-spacing:.5px;position:relative;z-index:1}
-.hero p{font-size:13px;opacity:.88;margin-top:7px;line-height:1.75;position:relative;z-index:1}
+/* ================= 导航条 ================= */
+.navstrip{display:flex;gap:2px;background:#0a1428;border-bottom:1px solid var(--line);
+  padding:0 22px;position:sticky;top:52px;z-index:39}
+.navstrip button{background:none;border:none;color:var(--dim);font-size:13px;font-family:inherit;
+  padding:11px 20px;cursor:pointer;border-bottom:2px solid transparent;transition:.15s;letter-spacing:1px}
+.navstrip button:hover{color:var(--txt)}
+.navstrip button.active{color:var(--cyan);border-bottom-color:var(--cyan);background:rgba(34,211,238,.05)}
+.kernel{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--faint)}
 
-.content{max-width:1280px;margin:0 auto;padding:20px 28px 46px}
-.page{display:none}.page.active{display:block;animation:fadein .22s ease}
-@keyframes fadein{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.wrap{max-width:1560px;margin:0 auto;padding:16px 22px 40px}
+.page{display:none}.page.active{display:block;animation:fadein .2s ease}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
 
-/* ============ 组件 ============ */
-.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
-  padding:18px 20px;margin-bottom:16px;box-shadow:var(--shadow)}
-.card h3{font-size:14px;font-weight:700;margin-bottom:13px;display:flex;align-items:center;gap:8px}
-.card h3 .hint-txt{font-weight:400;font-size:12px;color:var(--dim)}
+/* ================= 面板 ================= */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;margin-bottom:14px}
+.p-h{display:flex;align-items:center;gap:9px;padding:9px 14px;border-bottom:1px solid var(--line);
+  font-size:12.5px;letter-spacing:2px;color:#9db1d6}
+.p-h::before{content:'';width:3px;height:13px;background:var(--cyan);border-radius:2px}
+.p-h .r{margin-left:auto;font-size:11.5px;color:var(--dim);letter-spacing:0}
+.p-b{padding:12px 14px}
 
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;
-  background:var(--primary);color:#fff;border:none;border-radius:8px;padding:9px 18px;
-  font-size:13px;cursor:pointer;transition:.15s;font-family:inherit;font-weight:500}
-.btn:hover:not(:disabled){background:var(--primary-dark)}
-.btn:disabled{opacity:.5;cursor:not-allowed}
-.btn.outline{background:#fff;color:var(--primary);border:1px solid var(--primary)}
-.btn.outline:hover:not(:disabled){background:var(--primary-weak)}
-.btn.danger{background:var(--red)}.btn.danger:hover:not(:disabled){background:#b91c1c}
-.btn.sm{padding:6px 13px;font-size:12.5px;border-radius:7px}
-.btn.loading{pointer-events:none;opacity:.75}
-.btn.loading::after{content:'';width:13px;height:13px;border:2px solid rgba(255,255,255,.45);
-  border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
+.grid{display:grid;gap:14px}
+.g-overview{grid-template-columns:minmax(0,2fr) minmax(330px,1fr)}
+@media(max-width:1200px){.g-overview{grid-template-columns:1fr}}
 
-.cases{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:11px}
-.case-card{position:relative;background:#fff;border:1px solid var(--line);border-radius:var(--radius);
-  padding:13px 15px;cursor:pointer;transition:.16s;text-align:left;font-family:inherit;overflow:hidden}
-.case-card:hover{transform:translateY(-2px);box-shadow:0 5px 16px rgba(37,99,235,.13)}
-.case-card:disabled{cursor:wait;opacity:.7}
-.case-card .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:7px}
-.case-card .name{font-size:14px;font-weight:700;color:var(--text)}
-.case-card .tag{font-size:11.5px;color:var(--dim);margin:4px 0 6px}
-.case-card .desc{font-size:12px;color:var(--dim);line-height:1.65;display:-webkit-box;
-  -webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.case-card .go{margin-top:9px;font-size:12px;font-weight:600;color:var(--case,#2563eb)}
-.case-card.running{border-color:var(--case,#2563eb);box-shadow:0 0 0 2px rgba(37,99,235,.18)}
+/* 遥测 KPI */
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:14px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+  padding:11px 14px;position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--kc,var(--cyan))}
+.kpi .l{font-size:11.5px;color:var(--dim);letter-spacing:1px}
+.kpi .v{font-size:23px;font-weight:700;color:var(--kc,var(--txt));margin-top:3px}
+.kpi .u{font-size:11px;color:var(--faint);margin-left:4px;font-weight:400}
 
-.dropzone{border:1.5px dashed var(--line-strong);border-radius:var(--radius);background:#fafbfd;
-  padding:24px 18px;text-align:center;cursor:pointer;transition:.18s}
-.dropzone:hover,.dropzone.dragover{border-color:var(--primary);background:var(--primary-weak)}
-.dropzone svg{width:29px;height:29px;color:var(--faint);margin-bottom:8px}
-.dropzone.dragover svg{color:var(--primary)}
-.dropzone .t1{font-size:13.5px;font-weight:600}
-.dropzone .t2{font-size:12px;color:var(--dim);margin-top:5px;line-height:1.7}
-.dropzone.hasfile{border-style:solid;border-color:var(--green);background:var(--green-weak)}
+/* AGC 指令面板 */
+.agc-cmd{text-align:center;padding:10px 10px 16px}
+.agc-cmd .t{font-size:12px;color:var(--dim);letter-spacing:2px}
+.agc-cmd .big{font-size:62px;font-weight:800;line-height:1.05;color:var(--cyan);
+  text-shadow:0 0 26px rgba(34,211,238,.45);font-family:Consolas,monospace}
+.agc-cmd .sub{font-size:12px;color:var(--dim);margin-top:2px}
+.agc-cmd .mw{font-size:25px;font-weight:700;margin-top:8px;font-family:Consolas,monospace}
+.agc-cmd .mw span{font-size:13px;color:var(--faint)}
+.nextin{margin-top:9px;font-size:11.5px;color:var(--faint)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;margin-top:10px}
+.seg button{background:none;border:none;color:var(--dim);font-size:11.5px;padding:5px 13px;
+  cursor:pointer;font-family:inherit;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:none}
+.seg button.on{background:rgba(34,211,238,.15);color:var(--cyan)}
 
-.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:11px;margin-bottom:16px}
-.kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
-  padding:13px 8px;text-align:center;box-shadow:var(--shadow)}
-.kpi .v{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
-.kpi.pos .v{color:var(--green)} .kpi.neg .v{color:var(--red)} .kpi.blue .v{color:var(--primary)}
-.kpi.orange .v{color:var(--orange)} .kpi.purple .v{color:var(--purple)}
-.kpi .l{font-size:11.5px;color:var(--dim);margin-top:3px}
+/* 机组状态行 */
+.unit-row{display:flex;align-items:center;gap:10px;padding:7px 2px;
+  border-bottom:1px dashed #16223c;font-size:12.5px}
+.unit-row:last-child{border-bottom:none}
+.unit-row .nm{width:80px;color:var(--dim);flex:none}
+.st{font-size:11px;padding:2px 9px;border-radius:4px;font-weight:600;flex:none;width:44px;text-align:center}
+.st.run{background:rgba(47,213,113,.12);color:var(--green)}
+.st.idle{background:rgba(148,163,184,.1);color:var(--faint)}
+.bar{flex:1;height:7px;background:#15203a;border-radius:4px;overflow:hidden}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,#2563eb,#22d3ee);
+  border-radius:4px;transition:width .3s}
+.unit-row .val{width:76px;text-align:right;font-family:Consolas,monospace;flex:none}
 
-.tbl-wrap{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:9px}
+/* 单线图 */
+.sld{width:100%;display:block}
+.sld text{font-family:"Microsoft YaHei";fill:var(--dim);font-size:12px}
+.sld .val{font-family:Consolas,monospace;fill:var(--txt);font-weight:700;font-size:14px}
+.sld .blk{fill:#12203c;stroke:#28395c;stroke-width:1.2}
+.sld .wire{stroke:#31456e;stroke-width:2;fill:none}
+.sld .flow{stroke-dasharray:7 7;animation:dash 1.1s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-14}}
+.busbar{stroke:#4da3ff;stroke-width:5}
+
+/* 事件 */
+.evt{display:flex;gap:9px;padding:6px 2px;font-size:12px;border-bottom:1px dashed #16223c;line-height:1.5}
+.evt:last-child{border-bottom:none}
+.evt .tm{color:var(--faint);font-family:Consolas,monospace;flex:none;width:58px}
+.evt .dot2{width:6px;height:6px;border-radius:50%;margin-top:6px;flex:none}
+.evt.info .dot2{background:var(--blue)}.evt.ok .dot2{background:var(--green)}
+.evt.warn .dot2{background:var(--yellow)}.evt.alarm .dot2{background:var(--red)}
+.evt.info .tx{color:#b9c8e6}.evt.ok .tx{color:#8fe3b4}
+.evt.warn .tx{color:#efd98a}.evt.alarm .tx{color:#ffaab2}
+
+.tbl-wrap{max-height:520px;overflow:auto;border:1px solid var(--line);border-radius:8px}
 table{width:100%;border-collapse:collapse;font-size:12.5px}
-thead th{position:sticky;top:0;background:#f8fafc;color:var(--dim);font-weight:600;text-align:left;
-  padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap;z-index:1}
-td{padding:7px 12px;border-bottom:1px solid #f1f5f9;font-variant-numeric:tabular-nums}
-th.num,td.num{text-align:right}
-tbody tr:hover td{background:#f8fafc}
+thead th{position:sticky;top:0;background:#0c1630;color:var(--dim);font-weight:600;text-align:left;
+  padding:9px 13px;border-bottom:1px solid var(--line);z-index:1;letter-spacing:1px}
+td{padding:7px 13px;border-bottom:1px solid #131f3a}
+tbody tr:hover td{background:#101d38}
+.filters{display:flex;gap:8px;margin-bottom:12px}
+.fbtn{background:var(--panel);border:1px solid var(--line);color:var(--dim);border-radius:6px;
+  padding:6px 15px;font-size:12.5px;cursor:pointer;font-family:inherit}
+.fbtn.on{color:var(--cyan);border-color:var(--cyan);background:rgba(34,211,238,.08)}
 
-.empty{border:1.5px dashed var(--line-strong);border-radius:var(--radius);padding:44px 20px;text-align:center;color:var(--dim)}
-.empty svg{width:38px;height:38px;color:#c3cedb;margin-bottom:11px}
-.empty .t1{font-size:14.5px;font-weight:600;color:var(--text)}
-.empty .t2{font-size:12.5px;margin-top:7px;line-height:1.8}
+.cases{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.case-card{position:relative;background:var(--panel2);border:1px solid var(--line);border-radius:8px;
+  padding:14px 16px;cursor:pointer;transition:.16s;text-align:left;font-family:inherit;color:var(--txt)}
+.case-card:hover{border-color:var(--cyan);transform:translateY(-2px)}
+.case-card:disabled{opacity:.6;cursor:wait}
+.case-card .name{font-size:14.5px;font-weight:700}
+.case-card .tag{font-size:11.5px;color:var(--cyan);margin:4px 0 6px}
+.case-card .desc{font-size:12px;color:var(--dim);line-height:1.65}
+.case-card.running{border-color:var(--cyan);box-shadow:0 0 0 2px rgba(34,211,238,.25)}
 
-.log-box{background:#0b1220;border-radius:9px;padding:12px;min-height:220px;max-height:340px;
-  overflow-y:auto;font-family:Consolas,monospace;font-size:12px;line-height:1.75}
-.log-box div{color:#8ea0bd}.log-box .ok{color:#4ade80}.log-box .err{color:#f87171}.log-box .info{color:#60a5fa}
-
-.progress{height:8px;background:#e8edf4;border-radius:5px;overflow:hidden;margin:10px 0 7px}
-.progress i{display:block;height:100%;width:0%;border-radius:5px;
-  background:linear-gradient(90deg,#3b82f6,#2563eb);transition:width .5s}
-
-.badge{display:inline-flex;align-items:center;gap:6px;padding:3px 12px;border-radius:13px;
-  font-size:11.5px;font-weight:600;vertical-align:middle}
-.badge::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor}
-.badge.run{background:var(--green-weak);color:var(--green)}
-.badge.stop{background:#f1f5f9;color:var(--dim)}
-.badge.err{background:#fee2e2;color:var(--red)}
-
-.sim-bar{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
-.sim-clock{font-size:29px;font-weight:700;color:var(--primary);font-family:Consolas,monospace;
-  min-width:112px;text-align:center;background:var(--primary-weak);border:1px solid #bfdbfe;
-  border-radius:9px;padding:3px 12px;margin-left:auto;font-variant-numeric:tabular-nums}
-.sim-day{font-size:11.5px;color:var(--dim);min-width:50px;text-align:center;font-variant-numeric:tabular-nums}
-.cmd-panel{background:#f8fafc;border:1px solid var(--line);border-radius:9px;padding:13px 15px;
-  font-size:13px;line-height:2}
-.cmd-panel b.big{font-size:21px;color:var(--red)}
-
-#toasts{position:fixed;right:20px;bottom:20px;z-index:99;display:flex;flex-direction:column;gap:9px}
-.toast{background:#fff;border:1px solid var(--line);border-left-width:4px;border-radius:9px;
-  padding:11px 16px;font-size:13px;min-width:240px;max-width:360px;
-  box-shadow:0 6px 22px rgba(15,23,42,.14);animation:slidein .25s ease}
-.toast.ok{border-left-color:var(--green)} .toast.err{border-left-color:var(--red)} .toast.info{border-left-color:var(--primary)}
+#toasts{position:fixed;right:18px;bottom:18px;z-index:99;display:flex;flex-direction:column;gap:9px}
+.toast{background:#0f1c36;border:1px solid var(--line);border-left-width:4px;border-radius:8px;
+  padding:11px 15px;font-size:12.5px;min-width:240px;max-width:360px;
+  box-shadow:0 8px 24px rgba(0,0,0,.5);animation:slidein .25s ease}
+.toast.ok{border-left-color:var(--green)}.toast.err{border-left-color:var(--red)}.toast.info{border-left-color:var(--blue)}
 @keyframes slidein{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
 .toast.out{opacity:0;transform:translateX(24px);transition:.3s}
 
 .row{display:flex;gap:14px;flex-wrap:wrap}
 .col{flex:1;min-width:270px}
-label.lb{font-size:12.5px;color:var(--dim);display:block;margin:2px 0 5px;font-weight:500}
-input[type=number],input[type=text]{width:100%;background:#fff;border:1px solid #cbd5e1;border-radius:8px;
-  color:var(--text);padding:9px 11px;font-size:13px;outline:none;transition:.15s;font-family:inherit}
-input:hover{border-color:#94a3b8}
-input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
-.hint{font-size:12px;color:var(--dim);line-height:1.75;background:#f8fafc;
-  border-left:3px solid var(--line-strong);padding:8px 13px;border-radius:0 7px 7px 0;margin-top:12px}
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-@media(max-width:1180px){.kpis{grid-template-columns:repeat(3,1fr)}.grid-2{grid-template-columns:1fr}}
-@media(max-width:980px){
-  .topnav-in{gap:12px;padding:0 14px}.brand .t2{display:none}
-  .tab{padding:0 9px;font-size:12.5px}.model-box .lb{display:none}select{min-width:150px}
-  .hero-wrap,.content{padding-left:14px;padding-right:14px}
-}
+.hint{font-size:12px;color:var(--dim);line-height:1.75;background:#0c1730;
+  border-left:3px solid #28395c;padding:9px 13px;border-radius:0 7px 7px 0;margin-top:12px}
 </style>
 </head>
 <body>
 
-<!-- ================= 顶部导航 ================= -->
-<header class="topnav">
-  <div class="topnav-in">
-    <div class="brand">
-      <div class="brand-mark">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/>
-        </svg>
-      </div>
-      <div><div class="t1">氨电联产调度平台</div><div class="t2">NH3-AGC · PPO CORE</div></div>
+<!-- ================= 系统状态栏 ================= -->
+<div class="sysbar">
+  <div class="brand">
+    <div class="brand-mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg>
     </div>
-
-    <div class="nav-tabs" id="navTabs">
-      <button class="tab active" data-p="predict" data-title="推理预测" data-desc="内置案例一键评估，或上传风光负荷曲线，获得未来一日 96 时步的电解槽功率调度指令与全系统经济结算">
-        推理预测
-      </button>
-      <button class="tab" data-p="compare" data-title="多模型对比" data-desc="同一条曲线上对磁盘全部 checkpoint 批量执行一日调度，横向比较收益、消纳率与产量指标">
-        多模型对比
-      </button>
-      <button class="tab" data-p="train" data-title="在线训练" data-desc="配置步数与并行环境数启动后台训练，收敛曲线每秒推送；完成后新模型自动注册进上方选择框">
-        在线训练
-      </button>
-      <button class="tab" data-p="sim" data-title="实时仿真" data-desc="火电 AGC 滚动决策演示：模拟真实调度场景，每 15 分钟下发一次电解槽功率指令，支持暂停、单步与场景重置">
-        实时仿真
-      </button>
-    </div>
-
-    <div class="model-box">
-      <span class="lb">调度模型</span>
-      <div class="select-wrap">
-        <select id="modelSelect"><option>加载中…</option></select>
-      </div>
-    </div>
+    <div><b>氨电联产 AGC 调度控制系统</b><i>NH3-COGEN ENERGY MANAGEMENT SYSTEM</i></div>
   </div>
-</header>
-
-<!-- ================= 渐变横幅 ================= -->
-<div class="hero-wrap">
-  <div class="hero">
-    <h1 id="heroTitle">推理预测</h1>
-    <p id="heroDesc"></p>
+  <div class="comm"><span class="lamp g" id="commLamp"></span><span id="commTxt">通信正常</span></div>
+  <div class="shift">值别：白班 · 运行方式：AGC 自动</div>
+  <div class="sp"></div>
+  <div class="alarmchip" id="alarmChip">告警 0</div>
+  <div>
+    <div class="clock mono" id="clock">--:--:--</div>
+    <div class="datechip" id="dateChip">----</div>
   </div>
 </div>
 
-<div class="content">
+<!-- ================= 导航 ================= -->
+<div class="navstrip">
+  <button class="active" data-p="overview">调度总览</button>
+  <button data-p="trend">实时趋势</button>
+  <button data-p="replay">典型日复盘</button>
+  <button data-p="events">事件记录</button>
+  <div class="kernel"><span class="lamp g"></span>策略内核 PPO-v1.0 · 已投运</div>
+</div>
 
-  <!-- ======== 推理预测 ======== -->
-  <div class="page active" id="page-predict">
-    <div class="card">
-      <h3>内置测试案例<span class="hint-txt">点击卡片即用所选模型完成「推理 + 基线对比」全流程</span></h3>
-      <div class="cases" id="caseGrid"></div>
+<div class="wrap">
+
+  <!-- ======== 调度总览 ======== -->
+  <div class="page active" id="page-overview">
+    <div class="kpis">
+      <div class="kpi" style="--kc:var(--cyan)"><div class="l">当前 AGC 指令</div><div class="v mono" id="kCmd">--<span class="u">档</span></div></div>
+      <div class="kpi" style="--kc:var(--green)"><div class="l">当日综合收益</div><div class="v mono" id="kRev">--<span class="u">万元</span></div></div>
+      <div class="kpi" style="--kc:var(--blue)"><div class="l">新能源利用率</div><div class="v mono" id="kUtil">--<span class="u">%</span></div></div>
+      <div class="kpi" style="--kc:var(--purple)"><div class="l">累计产氢</div><div class="v mono" id="kH2">--<span class="u">t</span></div></div>
+      <div class="kpi" style="--kc:var(--green)"><div class="l">累计产氨</div><div class="v mono" id="kNh3">--<span class="u">t</span></div></div>
+      <div class="kpi" style="--kc:var(--orange)"><div class="l">瞬时弃电</div><div class="v mono" id="kCurt">--<span class="u">MW</span></div></div>
     </div>
 
-    <div class="card">
-      <h3>自定义曲线<span class="hint-txt">CSV / Excel · pv、wind、load 三列</span></h3>
-      <div class="dropzone" id="dropzone" onclick="document.getElementById('pFile').click()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-        </svg>
-        <div class="t1" id="dzTitle">拖拽文件到此处，或点击选择</div>
-        <div class="t2">支持 96 行（15 分钟值）或 24 行小时值自动插值；无表头按 光伏/风电/负荷 列序解析<br>
-          <a href="#" onclick="downloadSample(event)" style="color:var(--primary)">下载示例 CSV</a></div>
-        <input type="file" id="pFile" accept=".csv,.xlsx,.xls" hidden>
-      </div>
-      <div style="margin-top:13px;display:flex;justify-content:flex-end">
-        <button class="btn" id="pBtn" onclick="doPredict()" disabled>上传并推理</button>
-      </div>
-    </div>
+    <div class="grid g-overview">
+      <div>
+        <div class="panel">
+          <div class="p-h">系统单线图<span class="r">遥测刷新中 · 15 min/时步</span></div>
+          <div class="p-b" style="padding:6px 10px">
+            <svg class="sld" viewBox="0 0 920 400">
+              <line class="busbar" x1="120" y1="150" x2="800" y2="150"/>
+              <text x="118" y="138" style="fill:#4da3ff;font-weight:700">220kV 母线</text>
 
-    <div id="emptyState" class="empty">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-      <div class="t1">尚未开始评估</div>
-      <div class="t2">点击上方任一内置案例立即体验；或拖入你自己的风光负荷曲线文件。<br>输出：一日 96 时步电解槽功率指令、经济结算与四策略对比。</div>
-    </div>
+              <rect class="blk" x="40" y="30" width="130" height="62" rx="6"/>
+              <text x="105" y="53" text-anchor="middle" style="fill:#fbbf24">光伏电站</text>
+              <text x="105" y="71" text-anchor="middle">装机 1000 MW</text>
+              <text class="val" id="sldPv" x="105" y="87" text-anchor="middle" style="fill:#fbbf24">-- MW</text>
+              <line class="wire" x1="105" y1="92" x2="105" y2="128"/>
+              <line class="wire flow" x1="105" y1="92" x2="105" y2="128" style="stroke:#fbbf24"/>
+              <polygon points="105,128 100,119 110,119" fill="#fbbf24"/>
 
-    <div id="pResult" style="display:none">
-      <div class="card" style="padding:14px 18px;margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <b style="font-size:14px" id="pTitle">评估结果</b>
-        <span style="font-size:12px;color:var(--dim)" id="pMeta"></span>
-      </div>
-      <div class="kpis" id="pKpi"></div>
-      <div class="card" style="padding:16px">
-        <h3>96 时步功率调度曲线</h3>
-        <div id="pDispatch" style="height:350px"></div>
-      </div>
-      <div class="grid-2" style="margin-bottom:16px">
-        <div class="card" style="margin:0">
-          <h3>电解槽运行档位时间线</h3>
-          <div id="pAction" style="height:200px"></div>
+              <rect class="blk" x="215" y="30" width="130" height="62" rx="6"/>
+              <text x="280" y="53" text-anchor="middle" style="fill:#34d399">风电场</text>
+              <text x="280" y="71" text-anchor="middle">装机 700 MW</text>
+              <text class="val" id="sldWind" x="280" y="87" text-anchor="middle" style="fill:#34d399">-- MW</text>
+              <line class="wire" x1="280" y1="92" x2="280" y2="128"/>
+              <line class="wire flow" x1="280" y1="92" x2="280" y2="128" style="stroke:#34d399"/>
+              <polygon points="280,128 275,119 285,119" fill="#34d399"/>
+
+              <rect class="blk" x="40" y="200" width="130" height="62" rx="6"/>
+              <text x="105" y="223" text-anchor="middle" style="fill:#60a5fa">区域负荷</text>
+              <text x="105" y="241" text-anchor="middle">峰值 800 MW</text>
+              <text class="val" id="sldLoad" x="105" y="257" text-anchor="middle" style="fill:#60a5fa">-- MW</text>
+              <line class="wire" x1="105" y1="172" x2="105" y2="200"/>
+              <line class="wire flow" x1="105" y1="172" x2="105" y2="200" style="stroke:#60a5fa"/>
+              <polygon points="105,200 100,191 110,191" fill="#60a5fa"/>
+
+              <rect class="blk" x="330" y="200" width="170" height="76" rx="6"/>
+              <text x="415" y="222" text-anchor="middle" style="fill:#f472b6">碱性电解槽</text>
+              <text x="415" y="239" text-anchor="middle">额定 400 MW · 11 档</text>
+              <text class="val" id="sldEly" x="415" y="260" text-anchor="middle" style="fill:#f472b6">-- MW</text>
+              <line class="wire" x1="415" y1="150" x2="415" y2="200"/>
+              <line class="wire flow" id="elyFlow" x1="415" y1="150" x2="415" y2="200" style="stroke:#f472b6"/>
+              <polygon points="415,200 410,191 420,191" fill="#f472b6"/>
+
+              <rect class="blk" x="550" y="210" width="150" height="56" rx="6"/>
+              <text x="625" y="232" text-anchor="middle" style="fill:#a78bfa">合成氨装置</text>
+              <text x="625" y="250" text-anchor="middle">哈勃-博世工艺</text>
+              <text class="val" id="sldNh3" x="625" y="292" text-anchor="middle" style="fill:#a78bfa">累计 -- t</text>
+              <line class="wire" x1="500" y1="238" x2="550" y2="238" style="stroke-dasharray:3 4"/>
+
+              <rect class="blk" x="750" y="196" width="140" height="96" rx="6"/>
+              <text x="820" y="216" text-anchor="middle" style="fill:#a78bfa">火电机组 3×300MW</text>
+              <text x="764" y="240">1G</text><text class="val" id="sldG1" x="882" y="240" text-anchor="end">--</text>
+              <text x="764" y="262">2G</text><text class="val" id="sldG2" x="882" y="262" text-anchor="end">--</text>
+              <text x="764" y="284">3G</text><text class="val" id="sldG3" x="882" y="284" text-anchor="end">--</text>
+              <line class="wire" x1="820" y1="150" x2="820" y2="196"/>
+              <line class="wire flow" x1="820" y1="150" x2="820" y2="196" style="stroke:#a78bfa"/>
+              <polygon points="820,196 815,187 825,187" fill="#a78bfa"/>
+
+              <text id="curtTag" x="540" y="118" text-anchor="middle"
+                    style="fill:#ff9f43;font-weight:700;display:none">弃电中 -- MW</text>
+              <text x="40" y="384" style="fill:#55688c">实线 = 功率潮流　虚线 = 物料流　箭头 = 潮流方向　数值为实时遥测</text>
+            </svg>
+          </div>
         </div>
-        <div class="card" style="margin:0">
-          <h3>四策略综合收益对比<span class="hint-txt">万元 / 日</span></h3>
-          <div id="pCompare" style="height:200px"></div>
+
+        <div class="panel" style="margin-bottom:0">
+          <div class="p-h">功率平衡趋势<span class="r">滚动窗口 48 时步</span></div>
+          <div class="p-b"><div id="ovChart" style="height:264px"></div></div>
         </div>
       </div>
-      <div class="card" style="margin:0">
-        <h3>逐时步调度指令明细</h3>
-        <div class="tbl-wrap"><table id="pTable"></table></div>
+
+      <div>
+        <div class="panel">
+          <div class="p-h">AGC 实时指令<span class="r mono" id="cmdNo">CMD ---</span></div>
+          <div class="p-b agc-cmd">
+            <div class="t">电解槽功率档位指令</div>
+            <div class="big mono" id="agcLevel">--</div>
+            <div class="sub">共 11 档（0 ~ 100%）</div>
+            <div class="mw mono"><span id="agcMw">---</span><span> / 400 MW</span></div>
+            <div class="nextin">下一指令下发：<span class="mono" id="nextIn">-- s</span></div>
+            <div class="seg" id="speedSeg">
+              <button data-ms="600">慢速</button>
+              <button data-ms="260" class="on">常用</button>
+              <button data-ms="90">加速</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="p-h">机组运行状态</div>
+          <div class="p-b" style="padding-top:6px">
+            <div class="unit-row"><span class="nm">电解槽</span><span class="st run" id="stEly">运行</span>
+              <div class="bar"><i id="barEly" style="width:0%"></i></div><span class="val" id="valEly">-- MW</span></div>
+            <div class="unit-row"><span class="nm">1号机组</span><span class="st run">并网</span>
+              <div class="bar"><i id="barG1" style="width:40%"></i></div><span class="val" id="valG1">-- MW</span></div>
+            <div class="unit-row"><span class="nm">2号机组</span><span class="st run">并网</span>
+              <div class="bar"><i id="barG2" style="width:40%"></i></div><span class="val" id="valG2">-- MW</span></div>
+            <div class="unit-row"><span class="nm">3号机组</span><span class="st run">并网</span>
+              <div class="bar"><i id="barG3" style="width:40%"></i></div><span class="val" id="valG3">-- MW</span></div>
+            <div class="unit-row"><span class="nm">合成氨</span><span class="st run" id="stNh3">运行</span>
+              <div class="bar"><i id="barNh3" style="width:0%"></i></div><span class="val" id="valNh3Rate">-- t/h</span></div>
+            <div class="unit-row"><span class="nm">液氨储罐</span><span class="st idle">备用</span>
+              <div class="bar"><i style="width:12%"></i></div><span class="val">5000 t</span></div>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-bottom:0">
+          <div class="p-h">实时事件<span class="r">最新 6 条</span></div>
+          <div class="p-b" style="padding-top:4px;min-height:158px" id="evtMini"></div>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- ======== 多模型对比 ======== -->
-  <div class="page" id="page-compare">
-    <div class="card">
-      <h3>批量对比设置<span class="hint-txt">自动覆盖磁盘上全部 checkpoint</span></h3>
-      <div class="dropzone" id="dropzoneC" onclick="document.getElementById('cFile').click()" style="padding:20px 16px">
-        <div class="t1" id="dzCTitle">拖拽曲线文件到此处，或点击选择</div>
-        <div class="t2">对每个已训练模型逐一执行一日调度（模型较多时耗时相应增加）</div>
-        <input type="file" id="cFile" accept=".csv,.xlsx,.xls" hidden>
-      </div>
-      <div style="margin-top:13px;display:flex;justify-content:flex-end">
-        <button class="btn" id="cBtn" onclick="doCompare()" disabled>开始批量对比</button>
-      </div>
+  <!-- ======== 实时趋势 ======== -->
+  <div class="page" id="page-trend">
+    <div class="panel">
+      <div class="p-h">全时步功率平衡<span class="r">当前运行日 · 96 时步 · 支持缩放</span></div>
+      <div class="p-b"><div id="trPower" style="height:330px"></div></div>
     </div>
-    <div id="cWrap" style="display:none">
-      <div class="card" style="padding:16px">
-        <h3>指标横向对比</h3>
-        <div id="cBar" style="height:310px"></div>
+    <div class="grid" style="grid-template-columns:1fr 1fr">
+      <div class="panel" style="margin:0">
+        <div class="p-h">累计产量曲线</div>
+        <div class="p-b"><div id="trProd" style="height:250px"></div></div>
       </div>
-      <div class="card" style="margin:0">
-        <div class="tbl-wrap" style="max-height:260px"><table id="cTable"></table></div>
+      <div class="panel" style="margin:0">
+        <div class="p-h">新能源消纳与弃电</div>
+        <div class="p-b"><div id="trUtil" style="height:250px"></div></div>
       </div>
     </div>
   </div>
 
-  <!-- ======== 在线训练 ======== -->
-  <div class="page" id="page-train">
-    <div class="card">
-      <h3>训练任务<span id="tState" class="badge stop">空闲</span></h3>
-      <div class="row">
-        <div class="col"><label class="lb">训练步数</label><input type="number" id="tSteps" value="300000"></div>
-        <div class="col"><label class="lb">并行环境数</label><input type="number" id="tEnvs" value="16"></div>
-        <div class="col"><label class="lb">随机种子</label><input type="number" id="tSeed" value="42"></div>
-        <div class="col"><label class="lb">保存目录</label><input type="text" id="tOut" value="output_web"></div>
-        <div style="display:flex;align-items:flex-end;gap:9px;padding-bottom:1px">
-          <button class="btn" id="tStartBtn" onclick="trainStart()">启动训练</button>
-          <button class="btn danger outline" id="tStopBtn" onclick="trainStop()" disabled>停止</button>
+  <!-- ======== 典型日复盘 ======== -->
+  <div class="page" id="page-replay">
+    <div class="panel">
+      <div class="p-h">典型日调度计划复盘<span class="r">由在运策略内核对典型场景执行全天推演</span></div>
+      <div class="p-b">
+        <div class="cases" id="caseGrid"></div>
+        <div class="hint">
+          说明：复盘用于运行分析与岗位培训。系统按典型日气象条件驱动策略内核完整推演一天 96 时步，
+          并与无电解槽、恒定功率、贪心消纳三种参照调度方式进行对照。
         </div>
       </div>
-      <div class="progress"><i id="tProg"></i></div>
-      <div style="font-size:12.5px;color:var(--dim)" id="tInfo">尚未启动训练</div>
     </div>
-    <div class="row">
-      <div class="card col" style="flex:1.6;margin-bottom:0">
-        <h3>收敛曲线（每秒推送）</h3>
-        <div id="tChart" style="height:330px"></div>
+    <div id="rpResult" style="display:none">
+      <div class="kpis" id="rpKpi"></div>
+      <div class="panel">
+        <div class="p-h">全天功率调度过程<span class="r" id="rpMeta"></span></div>
+        <div class="p-b"><div id="rpDispatch" style="height:330px"></div></div>
       </div>
-      <div class="card col" style="margin-bottom:0;display:flex;flex-direction:column">
-        <h3>运行日志</h3>
-        <div class="log-box" id="tLog"></div>
+      <div class="grid" style="grid-template-columns:1fr 1fr">
+        <div class="panel" style="margin:0">
+          <div class="p-h">电解槽档位时间线</div>
+          <div class="p-b"><div id="rpAction" style="height:190px"></div></div>
+        </div>
+        <div class="panel" style="margin:0">
+          <div class="p-h">四方式收益对照（万元/日）</div>
+          <div class="p-b"><div id="rpCompare" style="height:190px"></div></div>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- ======== 实时仿真 ======== -->
-  <div class="page" id="page-sim">
-    <div class="card">
-      <div class="sim-bar">
-        <button class="btn sm" id="simPlayBtn" onclick="simToggle()">开始仿真</button>
-        <button class="btn outline sm" onclick="simStepOnce()">单步</button>
-        <button class="btn outline sm" onclick="simReset()">重置场景</button>
-        <span style="font-size:12.5px;color:var(--dim)">速度 ms/步</span>
-        <input type="number" id="sSpeed" value="150" min="40" step="10" style="width:84px">
-        <span id="simState" class="badge stop" style="margin-left:6px">未运行</span>
-        <div class="sim-clock" id="simClock">--:--</div>
-        <div class="sim-day" id="simDay">0/96</div>
-      </div>
-      <div class="progress" style="margin:13px 0 0"><i id="simProg"></i></div>
+  <!-- ======== 事件记录 ======== -->
+  <div class="page" id="page-events">
+    <div class="filters" id="evtFilters">
+      <button class="fbtn on" data-f="all">全部</button>
+      <button class="fbtn" data-f="info">事项</button>
+      <button class="fbtn" data-f="ok">正常</button>
+      <button class="fbtn" data-f="warn">越限</button>
+      <button class="fbtn" data-f="alarm">告警</button>
     </div>
-    <div class="kpis" id="sKpi"></div>
-    <div class="row">
-      <div class="card col" style="flex:1.6;margin-bottom:0">
-        <h3>实时功率平衡（滚动窗口）</h3>
-        <div id="sPowerChart" style="height:320px"></div>
-      </div>
-      <div class="col" style="display:flex;flex-direction:column;gap:14px;min-width:290px">
-        <div class="card" style="margin:0">
-          <h3>累计氢氨产量</h3>
-          <div id="sCumChart" style="height:150px"></div>
-        </div>
-        <div class="card" style="margin:0;flex:1">
-          <h3>当前调度指令</h3>
-          <div class="cmd-panel" id="sCmd">点击「开始仿真」进入 AGC 滚动决策</div>
-        </div>
-      </div>
+    <div class="tbl-wrap">
+      <table id="evtTable">
+        <thead><tr><th style="width:95px">时间</th><th style="width:90px">类别</th><th>内容</th></tr></thead>
+        <tbody></tbody>
+      </table>
     </div>
   </div>
 
@@ -376,384 +384,316 @@ input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.12)
 <script>
 const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
 
-/* ---------------- Toast ---------------- */
-function toast(msg,type='info',ms=3800){
-  const d=document.createElement('div');
-  d.className='toast '+type;d.textContent=msg;
+/* ---------- Toast ---------- */
+function toast(msg,type='info',ms=3600){
+  const d=document.createElement('div');d.className='toast '+type;d.textContent=msg;
   $('#toasts').appendChild(d);
   setTimeout(()=>{d.classList.add('out');setTimeout(()=>d.remove(),320)},ms);
 }
 window.alert=m=>toast(m,'err',5000);
 
-/* ---------------- 导航 + 横幅联动 ---------------- */
-function activate(pid){
-  $$('#navTabs .tab').forEach(x=>{
-    const on=x.dataset.p===pid;
-    x.classList.toggle('active',on);
-    if(on){$('#heroTitle').textContent=x.dataset.title;$('#heroDesc').textContent=x.dataset.desc;}
-  });
-  $$('.page').forEach(p=>p.classList.remove('active'));
-  $('#page-'+pid).classList.add('active');
-  Object.values(CHARTS).forEach(c=>c.resize());
-  window.scrollTo({top:0});
+/* ---------- 时钟 ---------- */
+function tick(){
+  const n=new Date();
+  $('#clock').textContent=n.toLocaleTimeString('zh-CN',{hour12:false});
+  $('#dateChip').textContent=
+    `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')} 星期${'日一二三四五六'[n.getDay()]}`;
 }
-$$('#navTabs .tab').forEach(t=>t.onclick=()=>activate(t.dataset.p));
+setInterval(tick,1000);tick();
 
-/* ---------------- 图表 ---------------- */
+/* ---------- 导航 ---------- */
+$$('.navstrip button[data-p]').forEach(b=>b.onclick=()=>{
+  $$('.navstrip button[data-p]').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  $$('.page').forEach(p=>p.classList.remove('active'));
+  $('#page-'+b.dataset.p).classList.add('active');
+  Object.values(CHARTS).forEach(c=>c.resize());
+});
+
+/* ---------- 图表公共 ---------- */
 const CHARTS={};
 function chart(id){if(!CHARTS[id])CHARTS[id]=echarts.init(document.getElementById(id));return CHARTS[id];}
 window.addEventListener('resize',()=>Object.values(CHARTS).forEach(c=>c.resize()));
-const AXIS={color:'#64748b'},SPLIT={lineStyle:{color:'#eceff4'}};
-const C={pv:'#f59e0b',wind:'#16a34a',load:'#2563eb',ely:'#dc2626',th:'#7c3aed'};
+const AXIS={color:'#7f92b8'},SPLIT={lineStyle:{color:'rgba(45,61,95,.55)'}};
+const C={pv:'#fbbf24',wind:'#34d399',load:'#60a5fa',ely:'#f472b6',th:'#a78bfa'};
+function hm(h){return String(Math.floor(h)).padStart(2,'0')+':'+String(Math.round(h%1*60)).padStart(2,'0');}
+function axisX(data,interval){return{type:'category',data,axisLabel:{...AXIS,interval:interval||7,fontSize:10},axisLine:{lineStyle:{color:'#28395c'}}};}
+function axisY(name){return{type:'value',name,nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT};}
 
-/* ---------------- 模型下拉框 ---------------- */
-let MODELS=[];
-async function loadModels(){
-  try{
-    const j=await(await fetch('/api/models')).json();
-    MODELS=(j.models||[]).slice().sort((a,b)=>b.steps-a.steps);
-    const sel=$('#modelSelect');
-    sel.innerHTML=MODELS.map(m=>
-      `<option value="${m.name}">${m.name} · ${(m.steps/10000).toFixed(0)}万步</option>`).join('')
-      ||'<option value="">暂无模型，请先训练</option>';
-  }catch(e){$('#modelSelect').innerHTML='<option value="">后端未连接</option>';}
+/* ---------- 事件系统 ---------- */
+const EVTS=[];let alarmCnt=0,evtFilter='all';
+function pushEvt(cls,txt){
+  const t=new Date().toLocaleTimeString('zh-CN',{hour12:false});
+  EVTS.unshift({t,cls,txt});
+  if(EVTS.length>600)EVTS.pop();
+  if(cls==='warn'||cls==='alarm')alarmCnt++;
+  renderAlarm();renderMini();renderEvtTable();
 }
-function currentModel(){return $('#modelSelect').value||undefined;}
-loadModels();
+function renderAlarm(){
+  const c=$('#alarmChip');
+  c.textContent='告警 '+alarmCnt;
+  c.className='alarmchip'+(alarmCnt?' hot':'');
+}
+function renderMini(){
+  $('#evtMini').innerHTML=EVTS.slice(0,6).map(e=>
+    `<div class="evt ${e.cls}"><span class="tm">${e.t}</span><span class="dot2"></span><span class="tx">${e.txt}</span></div>`).join('');
+}
+function renderEvtTable(){
+  const map={info:'事项',ok:'正常',warn:'越限',alarm:'告警'};
+  const rows=EVTS.filter(e=>evtFilter==='all'||e.cls===evtFilter).map(e=>
+    `<tr><td class="mono">${e.t}</td>`+
+    `<td><span class="evt ${e.cls}" style="border:none;padding:0"><span class="dot2"></span><span class="tx">${map[e.cls]}</span></span></td>`+
+    `<td>${e.txt}</td></tr>`).join('');
+  document.querySelector('#evtTable tbody').innerHTML=
+    rows||'<tr><td colspan="3" style="color:var(--faint)">暂无记录</td></tr>';
+}
+$$('#evtFilters .fbtn').forEach(b=>b.onclick=()=>{
+  $$('#evtFilters .fbtn').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');evtFilter=b.dataset.f;renderEvtTable();
+});
 
-/* ---------------- 日志 / loading ---------------- */
-function log(msg,cls='info'){
-  const d=document.createElement('div');
-  d.className=cls;d.textContent=`[${new Date().toLocaleTimeString()}] ${msg}`;
-  $('#tLog').appendChild(d);$('#tLog').scrollTop=1e6;
+/* ---------- 仿真接入（自动连续运行） ---------- */
+let ws=null,speedMs=260,simDay=1,lastStep=null,dayStart=true,curtOn=false;
+let series={hour:[],pv:[],wind:[],load:[],ely:[],th:[],curtail:[],cumH:[],cumN:[],util:[]};
+
+function wsSend(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o));}
+function connect(){
+  ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws/simulate`);
+  ws.onopen=()=>{
+    $('#commLamp').className='lamp g';$('#commTxt').textContent='通信正常';
+    pushEvt('ok','SCADA 通信链路建立，AGC 策略内核投入自动方式');
+    wsSend({cmd:'start',interval_ms:speedMs});
+  };
+  ws.onclose=()=>{
+    $('#commLamp').className='lamp r';$('#commTxt').textContent='通信中断';
+    pushEvt('alarm','SCADA 通信链路中断，尝试重连…');
+    setTimeout(connect,2500);
+  };
+  ws.onerror=()=>{};
+  ws.onmessage=e=>{
+    const j=JSON.parse(e.data);
+    if(j.type==='started'){
+      if(dayStart){pushEvt('info',`第 ${simDay} 运行日开始，AGC 转入自动调度`);dayStart=false;}
+      return;
+    }
+    if(j.type==='paused'||j.type==='reset')return;
+    if(j.done&&j.summary){onDayDone(j.summary);setTimeout(()=>wsSend({cmd:'start',interval_ms:speedMs}),1600);return;}
+    if(j.t!==undefined)onStep(j);
+  };
 }
-function setLoading(btn,on,txtBusy){
-  if(on){btn.dataset.txt=btn.textContent;btn.classList.add('loading');btn.disabled=true;
-    if(txtBusy)btn.childNodes[0].textContent=txtBusy;}
-  else{btn.classList.remove('loading');btn.disabled=false;
-    if(btn.dataset.txt)btn.textContent=btn.dataset.txt;}
+function onDayDone(s){
+  pushEvt('ok',`第 ${simDay} 运行日结算完成：综合收益 ${s.total_reward_wan} 万元，产氢 ${s.h2_t} t，产氨 ${s.nh3_t} t，利用率 ${s.utilization_pct}%`);
+  toast(`第 ${simDay} 运行日结算完成：${s.total_reward_wan} 万元`,'ok');
+  simDay++;dayStart=true;curtOn=false;lastStep=null;
+  series={hour:[],pv:[],wind:[],load:[],ely:[],th:[],curtail:[],cumH:[],cumN:[],util:[]};
+  renderTrend();
+}
+$$('#speedSeg button').forEach(b=>b.onclick=()=>{
+  $$('#speedSeg button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');speedMs=+b.dataset.ms;
+  pushEvt('info',`AGC 遥测刷新周期调整为 ${speedMs} ms`);
+});
+
+/* ---------- 每时步处理 ---------- */
+function onStep(j){
+  const D=series;
+  D.hour.push(j.hour);D.pv.push(j.pv);D.wind.push(j.wind);D.load.push(j.load);
+  D.ely.push(j.ely_mw);D.th.push(j.th_mw);D.curtail.push(j.curtail_mw);
+  D.cumH.push(j.cum_h2_t);D.cumN.push(j.cum_nh3_t);D.util.push(+(j.utilization*100).toFixed(2));
+
+  /* KPI */
+  $('#kCmd').innerHTML=j.action_level+'<span class="u">档</span>';
+  $('#kRev').innerHTML=j.cum_reward_wan.toFixed(1)+'<span class="u">万元</span>';
+  $('#kUtil').innerHTML=(j.utilization*100).toFixed(1)+'<span class="u">%</span>';
+  $('#kH2').innerHTML=j.cum_h2_t.toFixed(2)+'<span class="u">t</span>';
+  $('#kNh3').innerHTML=j.cum_nh3_t.toFixed(2)+'<span class="u">t</span>';
+  $('#kCurt').innerHTML=j.curtail_mw.toFixed(0)+'<span class="u">MW</span>';
+
+  /* AGC 指令面板 */
+  $('#agcLevel').textContent=j.action_level;
+  $('#agcMw').textContent=j.ely_mw;
+  $('#cmdNo').textContent='CMD '+String(simDay).padStart(2,'0')+String(j.t+1).padStart(3,'0');
+  $('#nextIn').textContent=(speedMs/1000).toFixed(1)+' s';
+
+  /* 档位变化事件 */
+  if(lastStep&&j.action_level!==lastStep.lv){
+    const up=j.action_level>lastStep.lv;
+    pushEvt('info',`AGC 指令调整：电解槽 ${lastStep.lv} 档 → ${j.action_level} 档（${j.ely_mw} MW），${up?'增':'减'}载 ${Math.abs(j.ely_mw-lastStep.mw).toFixed(0)} MW`);
+  }
+  lastStep={lv:j.action_level,mw:j.ely_mw};
+
+  /* 弃电起止事件 */
+  const on=j.curtail_mw>30;
+  if(on&&!curtOn)pushEvt('warn',`出现弃电 ${j.curtail_mw.toFixed(0)} MW，电解槽按上限消纳中`);
+  if(!on&&curtOn)pushEvt('ok','弃电恢复，新能源电力全部消纳');
+  curtOn=on;
+
+  /* 单线图 */
+  $('#sldPv').textContent=j.pv.toFixed(0)+' MW';
+  $('#sldWind').textContent=j.wind.toFixed(0)+' MW';
+  $('#sldLoad').textContent=j.load.toFixed(0)+' MW';
+  $('#sldEly').textContent=j.ely_mw.toFixed(0)+' MW';
+  $('#sldNh3').textContent='累计 '+j.cum_nh3_t.toFixed(2)+' t';
+  const thAvg=j.th_mw/3;
+  $('#sldG1').textContent=$('#valG1').textContent=thAvg.toFixed(0)+' MW';
+  $('#sldG2').textContent=$('#valG2').textContent=thAvg.toFixed(0)+' MW';
+  $('#sldG3').textContent=$('#valG3').textContent=thAvg.toFixed(0)+' MW';
+  const ct=$('#curtTag');
+  ct.style.display=on?'block':'none';
+  if(on)ct.textContent='弃电中 '+j.curtail_mw.toFixed(0)+' MW';
+
+  /* 机组状态 */
+  const pct=Math.round(j.action_power);
+  $('#barEly').style.width=pct+'%';
+  $('#valEly').textContent=j.ely_mw+' MW';
+  $('#stEly').className='st '+(j.action_level===0?'idle':'run');
+  $('#stEly').textContent=j.action_level===0?'热备':'运行';
+  ['G1','G2','G3'].forEach(g=>{
+    $('#bar'+g).style.width=Math.min(100,Math.round(thAvg/300*100))+'%';
+  });
+  $('#barNh3').style.width=Math.min(100,Math.round(pct*.85))+'%';
+  $('#valNh3Rate').textContent=(j.cum_nh3_t/Math.max(.25,(j.t+1)*.25)).toFixed(2)+' t/h';
+
+  renderOv();renderTrend();
 }
 
-/* ---------------- 内置案例 ---------------- */
-const CASE_COLORS={'summer_sunny':'#ea580c','winter_rain':'#2563eb','autumn_cloudy':'#16a34a','spring_wind':'#0891b2'};
+/* ---------- 总览滚动图 ---------- */
+function renderOv(){
+  const W=48,D=series,sl=a=>a.slice(-W);
+  if(!D.hour.length)return;
+  chart('ovChart').setOption({
+    backgroundColor:'transparent',
+    tooltip:{trigger:'axis'},
+    legend:{textStyle:{color:'#9db1d6',fontSize:10},top:0},
+    grid:{left:46,right:14,top:28,bottom:24},
+    xAxis:axisX(sl(D.hour).map(hm)),
+    yAxis:axisY('MW'),
+    series:[
+      {name:'光伏',type:'line',showSymbol:false,data:sl(D.pv),itemStyle:{color:C.pv},areaStyle:{opacity:.14}},
+      {name:'风电',type:'line',showSymbol:false,data:sl(D.wind),itemStyle:{color:C.wind},areaStyle:{opacity:.14}},
+      {name:'负荷',type:'line',showSymbol:false,data:sl(D.load),itemStyle:{color:C.load},lineStyle:{width:2}},
+      {name:'电解槽',type:'line',showSymbol:false,data:sl(D.ely),itemStyle:{color:C.ely},lineStyle:{width:3}},
+      {name:'火电',type:'line',showSymbol:false,data:sl(D.th),itemStyle:{color:C.th},lineStyle:{type:'dashed'}},
+    ]},true);
+}
+
+/* ---------- 趋势页 ---------- */
+function renderTrend(){
+  const D=series;if(!D.hour.length)return;
+  chart('trPower').setOption({
+    backgroundColor:'transparent',
+    tooltip:{trigger:'axis'},legend:{textStyle:{color:'#9db1d6',fontSize:11},top:0},
+    grid:{left:50,right:16,top:32,bottom:34},
+    xAxis:axisX(D.hour.map(hm),11),
+    yAxis:axisY('MW'),
+    dataZoom:[{type:'inside'},{type:'slider',height:16,bottom:4,borderColor:'#28395c'}],
+    series:[
+      {name:'光伏',type:'line',smooth:true,showSymbol:false,data:D.pv,itemStyle:{color:C.pv},areaStyle:{opacity:.12}},
+      {name:'风电',type:'line',smooth:true,showSymbol:false,data:D.wind,itemStyle:{color:C.wind},areaStyle:{opacity:.12}},
+      {name:'负荷',type:'line',smooth:true,showSymbol:false,data:D.load,itemStyle:{color:C.load},lineStyle:{width:2}},
+      {name:'电解槽',type:'line',smooth:true,showSymbol:false,data:D.ely,itemStyle:{color:C.ely},lineStyle:{width:3}},
+      {name:'火电',type:'line',smooth:true,showSymbol:false,data:D.th,itemStyle:{color:C.th},lineStyle:{type:'dashed'}},
+      {name:'弃电',type:'bar',data:D.curtail,itemStyle:{color:'rgba(255,159,67,.5)'},barWidth:3},
+    ]},true);
+  chart('trProd').setOption({
+    backgroundColor:'transparent',
+    tooltip:{trigger:'axis'},legend:{textStyle:{color:'#9db1d6',fontSize:11},top:0},
+    grid:{left:46,right:46,top:30,bottom:26},
+    xAxis:axisX(D.hour.map(hm),11),
+    yAxis:[
+      {type:'value',name:'氢 t',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT},
+      {type:'value',name:'氨 t',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:{show:false}}],
+    series:[
+      {name:'累计产氢',type:'line',showSymbol:false,data:D.cumH,itemStyle:{color:'#22d3ee'},areaStyle:{opacity:.14}},
+      {name:'累计产氨',type:'line',yAxisIndex:1,showSymbol:false,data:D.cumN,itemStyle:{color:'#34d399'}}]},true);
+  chart('trUtil').setOption({
+    backgroundColor:'transparent',
+    tooltip:{trigger:'axis'},legend:{show:false},
+    grid:{left:46,right:20,top:30,bottom:26},
+    xAxis:axisX(D.hour.map(hm),11),
+    yAxis:{type:'value',min:60,max:100,name:'%',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT},
+    series:[{name:'实时利用率',type:'line',showSymbol:false,data:D.util,
+      itemStyle:{color:'#2fd571'},lineStyle:{width:2},
+      markLine:{silent:true,symbol:'none',label:{color:'#f5c542',formatter:'考核线 90%'},
+        lineStyle:{color:'#f5c542',type:'dashed'},data:[{yAxis:90}]}}]},true);
+}
+
+/* ---------- 典型日复盘 ---------- */
+const CASE_COLORS={'summer_sunny':'#ff9f43','winter_rain':'#4da3ff','autumn_cloudy':'#2fd571','spring_wind':'#22d3ee'};
 async function loadCases(){
   try{
     const j=await(await fetch('/api/cases')).json();
     $('#caseGrid').innerHTML=j.cases.map(c=>`
-      <button class="case-card" id="case-${c.id}" style="--case:${CASE_COLORS[c.id]||'#2563eb'}" onclick="runCase('${c.id}')">
-        <span class="dot" style="background:${CASE_COLORS[c.id]||'#2563eb'}"></span><span class="name">${c.name}</span>
+      <button class="case-card" id="case-${c.id}" onclick="runCase('${c.id}')">
+        <span class="name"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${CASE_COLORS[c.id]||'#22d3ee'};margin-right:8px"></span>${c.name}</span>
         <div class="tag">${c.tagline} · ${c.region}</div>
         <div class="desc">${c.desc}</div>
-        <div class="go">使用所选模型运行</div>
       </button>`).join('');
-  }catch(e){$('#caseGrid').innerHTML='<div class="hint">案例列表加载失败，请确认后端已启动。</div>';}
+  }catch(e){$('#caseGrid').innerHTML='<div class="hint">典型案例加载失败，请检查后端服务。</div>';}
 }
 loadCases();
 
 async function runCase(id){
   const card=$('#case-'+id);
   $$('.case-card').forEach(x=>x.classList.remove('running'));
-  card.classList.add('running');card.disabled=true;setLoading(card,true,'运行中…');
+  card.classList.add('running');card.disabled=true;
   try{
     const body=new FormData();body.append('case_id',id);
-    const m=currentModel();if(m)body.append('model',m);
     const r=await fetch('/api/run_case',{method:'POST',body});
     if(!r.ok)throw new Error((await r.json()).detail||r.statusText);
-    const j=await r.json();
-    renderPredict(j,j.case.name+' · '+j.case.region,j.case.tagline+'　模型 '+j.model);
-    toast(`案例完成：收益 ${j.summary.reward_wan} 万元/日`,'ok');
-    log(`案例 ${id} 完成：${j.summary.reward_wan} 万`,'ok');
-  }catch(e){toast('案例运行失败：'+e.message,'err',5000);log('案例失败: '+e.message,'err');}
-  card.classList.remove('running');card.disabled=false;setLoading(card,false);
-}
-
-/* ---------------- 拖拽上传 ---------------- */
-function bindDrop(zoneId,inputId,titleId,cb){
-  const z=$(zoneId),inp=$(inputId);
-  ['dragenter','dragover'].forEach(ev=>z.addEventListener(ev,e=>{e.preventDefault();z.classList.add('dragover')}));
-  ['dragleave','drop'].forEach(ev=>z.addEventListener(ev,e=>{e.preventDefault();z.classList.remove('dragover')}));
-  z.addEventListener('drop',e=>{if(e.dataTransfer.files.length){inp.files=e.dataTransfer.files;onFile();}});
-  inp.addEventListener('change',onFile);
-  function onFile(){
-    const f=inp.files[0];if(!f)return;
-    $(titleId).textContent=f.name+' ('+(f.size/1024).toFixed(1)+' KB)';
-    z.classList.add('hasfile');cb&&cb(true);
-  }
-  return ()=>!!inp.files[0];
-}
-const hasPredictFile=bindDrop('#dropzone','#pFile','#dzTitle',ok=>{$('#pBtn').disabled=!ok;});
-bindDrop('#dropzoneC','#cFile','#dzCTitle',ok=>{$('#cBtn').disabled=!ok;});
-
-/* ---------------- 推理 ---------------- */
-async function doPredict(){
-  if(!hasPredictFile())return toast('请先选择或拖入曲线文件','err');
-  const btn=$('#pBtn');setLoading(btn,true,'推理中…');
-  try{
-    const fd=new FormData();
-    fd.append('file',$('#pFile').files[0]);
-    const m=currentModel();if(m)fd.append('model',m);
-    const r=await fetch('/api/predict',{method:'POST',body:fd});
-    if(!r.ok)throw new Error((await r.json()).detail||r.statusText);
-    const j=await r.json();
-    renderPredict(j,'自定义曲线：'+j.filename,'模型 '+j.model);
-    toast(`推理完成：收益 ${j.summary.reward_wan} 万元/日`,'ok');
-  }catch(e){toast('推理失败：'+e.message,'err',5000);}
-  setLoading(btn,false);
-}
-
-function renderPredict(j,title,meta){
-  $('#emptyState').style.display='none';
-  $('#pResult').style.display='block';
-  $('#pTitle').textContent=title;
-  $('#pMeta').textContent=meta||'';
-  const s=j.summary;
-  const kpis=[
-    ['综合收益',s.reward_wan+' 万/日',s.reward_wan>=0?'pos':'neg'],
-    ['新能源消纳率',s.utilization_pct+'%','blue'],
-    ['弃电率',s.curtail_rate_pct+'%','orange'],
-    ['日产氢',s.h2_t+' t',''],
-    ['日产氨',s.nh3_t+' t','pos'],
-    ['CO₂ 减排',s.co2_reduction_t+' t','purple'],
-  ];
-  $('#pKpi').innerHTML=kpis.map(k=>`<div class="kpi ${k[2]}"><div class="v">${k[1]}</div><div class="l">${k[0]}</div></div>`).join('');
-  const ts=j.steps,cv=j.curve;
-  chart('pDispatch').setOption({
-    tooltip:{trigger:'axis'},legend:{textStyle:{color:'#334155',fontSize:11},top:0},
-    grid:{left:52,right:18,top:32,bottom:28},
-    xAxis:{type:'category',data:ts.map(x=>x.hour),axisLabel:{...AXIS,interval:11},axisLine:{lineStyle:{color:'#cbd5e1'}}},
-    yAxis:{type:'value',name:'MW',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT},
-    series:[
-      {name:'光伏',type:'line',smooth:true,showSymbol:false,data:cv.pv,itemStyle:{color:C.pv},areaStyle:{opacity:.14}},
-      {name:'风电',type:'line',smooth:true,showSymbol:false,data:cv.wind,itemStyle:{color:C.wind},areaStyle:{opacity:.14}},
-      {name:'负荷',type:'line',smooth:true,showSymbol:false,data:cv.load,itemStyle:{color:C.load},lineStyle:{width:2}},
-      {name:'电解槽指令',type:'line',smooth:true,showSymbol:false,data:ts.map(x=>x.ely_mw),itemStyle:{color:C.ely},lineStyle:{width:3}},
-      {name:'弃电',type:'bar',data:ts.map(x=>x.curtail_mw),itemStyle:{color:'rgba(234,88,12,.4)'},barWidth:3},
-    ]},true);
-  chart('pAction').setOption({
-    tooltip:{trigger:'axis',formatter:p=>`${p[0].data}: 档位${p[0].value}（${p[0].value*10}% 额定）`},
-    grid:{left:44,right:14,top:12,bottom:26},
-    xAxis:{type:'category',data:ts.map(x=>x.hour),axisLabel:{...AXIS,interval:11,fontSize:10},axisLine:{lineStyle:{color:'#cbd5e1'}}},
-    yAxis:{type:'value',max:10,name:'档位',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT},
-    series:[{type:'bar',data:ts.map(x=>x.action_level),barWidth:'100%',
-      itemStyle:{color:p=>['#eef2f7','#dbe3ec','#93c5fd','#60a5fa','#3b82f6','#2563eb','#1d4ed8','#1e40af','#f59e0b','#ea580c','#dc2626'][p.value],borderRadius:2}}]},true);
-  const b=j.baselines||{};
-  chart('pCompare').setOption({
-    tooltip:{trigger:'axis',formatter:'{b}: {c} 万元/日'},
-    grid:{left:58,right:10,top:14,bottom:42},
-    xAxis:{type:'category',data:['无电解槽','恒定功率','贪心消纳','PPO 调度'],axisLabel:{...AXIS,fontSize:10.5,interval:0},axisLine:{lineStyle:{color:'#cbd5e1'}}},
-    yAxis:{type:'value',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT},
-    series:[{type:'bar',data:[b.no_ely?.reward_wan??0,b.flat?.reward_wan??0,b.curtail_first?.reward_wan??0,s.reward_wan],
-      barWidth:27,label:{show:true,position:'top',color:'#334155',fontSize:11},
-      itemStyle:{color:p=>['#94a3b8','#cbd5e1','#16a34a','#dc2626'][p.dataIndex],borderRadius:[3,3,0,0]}}]},true);
-  const rows=ts.map(x=>{
-    const hh=String(Math.floor(x.hour)).padStart(2,'0'),mm=String(Math.round(x.hour%1*60)).padStart(2,'0');
-    return `<tr><td>${hh}:${mm}</td><td>${x.action_level}</td><td class="num">${x.ely_mw}</td><td class="num">${x.th_mw}</td><td class="num">${x.curtail_mw}</td><td class="num">${x.reward}</td></tr>`;
-  }).join('');
-  $('#pTable').innerHTML=
-    '<thead><tr><th>时刻</th><th>档位</th><th class="num">电解槽 MW</th><th class="num">火电 MW</th><th class="num">弃电 MW</th><th class="num">步收益（万元）</th></tr></thead><tbody>'+rows+'</tbody>';
-  Object.values(CHARTS).forEach(c=>c.resize());
-}
-
-async function downloadSample(ev){
-  ev.preventDefault();ev.stopPropagation();
-  const d=await(await fetch('/api/sample_curve?season=summer&weather=sunny')).json();
-  const csv='pv,wind,load\n'+d.pv.map((v,i)=>`${v},${d.wind[i]},${d.load[i]}`).join('\n');
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
-  a.download='sample_summer_sunny.csv';a.click();
-  toast('示例 CSV 已下载','ok',2500);
-}
-
-/* ---------------- 多模型对比 ---------------- */
-async function doCompare(){
-  if(!$('#cFile').files[0])return toast('请先选择曲线文件','err');
-  const btn=$('#cBtn');setLoading(btn,true,'对比中…');
-  try{
-    const fd=new FormData();fd.append('file',$('#cFile').files[0]);
-    const r=await fetch('/api/compare',{method:'POST',body:fd});
-    const j=await r.json();
-    const ok=j.results.filter(x=>!x.error);
-    if(!ok.length)throw new Error('所有模型推理均失败');
-    $('#cWrap').style.display='block';
-    const metrics=['reward_wan','utilization_pct','h2_t','nh3_t'];
-    const mNames=['收益 万元/日','消纳率 %','产氢 t','产氨 t'];
-    chart('cBar').setOption({
-      tooltip:{trigger:'axis'},legend:{textStyle:{color:'#334155'},top:0},
-      grid:{left:56,right:16,top:34,bottom:64},
-      xAxis:{type:'category',data:ok.map(x=>x.model),axisLabel:{...AXIS,interval:0,rotate:20,fontSize:11},axisLine:{lineStyle:{color:'#cbd5e1'}}},
-      yAxis:{type:'value',axisLabel:AXIS,splitLine:SPLIT},
-      series:mNames.map((mn,i)=>({name:mn,type:'bar',data:ok.map(x=>x.summary[metrics[i]]),
-        itemStyle:{borderRadius:[3,3,0,0]}}))},true);
-    $('#cTable').innerHTML='<thead><tr><th>模型</th>'+mNames.map(m=>`<th class="num">${m}</th>`).join('')+'</tr></thead><tbody>'+
-      ok.map(x=>`<tr><td>${x.model}</td>`+metrics.map(m=>`<td class="num">${x.summary[m]}</td>`).join('')+'</tr>').join('')+'</tbody>';
-    toast(`批量对比完成：${ok.length}/${j.results.length} 个模型成功`,'ok');
-    Object.values(CHARTS).forEach(c=>c.resize());
-  }catch(e){toast('对比失败：'+e.message,'err',5000);}
-  setLoading(btn,false);
-}
-
-/* ---------------- 在线训练 ---------------- */
-let es=null;
-function trainStart(){
-  const fd=new FormData();
-  fd.append('steps',$('#tSteps').value);fd.append('n_envs',$('#tEnvs').value);
-  fd.append('seed',$('#tSeed').value);fd.append('outdir',$('#tOut').value);
-  fetch('/api/train/start',{method:'POST',body:fd})
-    .then(async r=>{const j=await r.json();
-      if(!r.ok)throw new Error(j.detail||r.statusText);
-      log(j.msg,'ok');watchTrain();})
-    .catch(e=>toast('启动失败：'+e.message,'err'));
-}
-function trainStop(){fetch('/api/train/stop',{method:'POST'}).then(r=>r.json()).then(j=>log(j.msg,'info'));}
-
-function watchTrain(){
-  if(es)es.close();
-  es=new EventSource('/api/train/stream');
-  const pts=[];
-  es.onmessage=ev=>{
-    const j=JSON.parse(ev.data);
-    pts.push(...j.new_points);
-    const st=$('#tState');
-    st.className='badge '+(j.running?'run':(j.error?'err':'stop'));
-    st.textContent=j.running?'训练中':(j.finished?(j.error?'出错':'已完成'):'空闲');
-    const cfgT=j.config||{};
-    if(j.running&&cfgT.steps){
-      const lastPt=pts[pts.length-1],last=lastPt?lastPt.step:0;
-      $('#tProg').style.width=(last/cfgT.steps*100)+'%';
-      $('#tInfo').textContent=`进度 ${last.toLocaleString()} / ${cfgT.steps.toLocaleString()} 步 · 回合 ${lastPt?lastPt.episode:0} · 最近回合收益 ${lastPt?lastPt.reward_mean:'-'} 万`;
-    }
-    if(!j.running){
-      $('#tStopBtn').disabled=true;$('#tStartBtn').disabled=false;
-      if(j.finished&&!j.error){
-        log('训练完成，新模型已加入顶部选择框','ok');
-        if(j.final_model)log('保存路径: '+j.final_model,'ok');
-        toast('训练完成，新模型已可用','ok');loadModels();
-      }
-      if(j.error)log('训练出错: '+j.error.split('\n')[0],'err');
-      es.close();es=null;
-    }else{$('#tStopBtn').disabled=false;$('#tStartBtn').disabled=true;}
-    chart('tChart').setOption({
-      tooltip:{trigger:'axis'},legend:{textStyle:{color:'#334155'},top:0},
-      grid:{left:60,right:58,top:32,bottom:30},
-      xAxis:{type:'value',name:'步数',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT},
-      yAxis:[
-        {type:'value',name:'回合收益（万）',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT},
-        {type:'value',name:'学习率',nameTextStyle:AXIS,axisLabel:{...AXIS,formatter:v=>v.toExponential(0)},splitLine:{show:false}}],
+    const j=await r.json(),s=j.summary;
+    $('#rpResult').style.display='block';
+    $('#rpMeta').textContent=j.case.name+' · '+j.case.region+' · 内核 PPO-v1.0';
+    const kpis=[
+      ['综合收益 万/日',s.reward_wan,s.reward_wan>=0?'var(--green)':'var(--red)'],
+      ['消纳率 %',s.utilization_pct,'var(--blue)'],
+      ['弃电率 %',s.curtail_rate_pct,'var(--orange)'],
+      ['产氢 t',s.h2_t,'var(--cyan)'],
+      ['产氨 t',s.nh3_t,'var(--green)'],
+      ['CO₂减排 t',s.co2_reduction_t,'var(--purple)'],
+    ];
+    $('#rpKpi').innerHTML=kpis.map(k=>
+      `<div class="kpi" style="--kc:${k[2]}"><div class="l">${k[0]}</div><div class="v mono">${k[1]}</div></div>`).join('');
+    const ts=j.steps,cv=j.curve;
+    chart('rpDispatch').setOption({
+      backgroundColor:'transparent',
+      tooltip:{trigger:'axis'},legend:{textStyle:{color:'#9db1d6',fontSize:11},top:0},
+      grid:{left:52,right:18,top:32,bottom:28},
+      xAxis:axisX(ts.map(x=>x.hour),11),yAxis:axisY('MW'),
       series:[
-        {name:'回合均收益',type:'line',showSymbol:false,smooth:true,
-         data:pts.filter(p=>p.reward_mean!=null).map(p=>[p.step,p.reward_mean]),
-         itemStyle:{color:'#2563eb'},areaStyle:{opacity:.1},lineStyle:{width:2}},
-        {name:'消纳率 %',type:'line',showSymbol:false,
-         data:pts.map(p=>[p.step,p.util_pct]),itemStyle:{color:'#16a34a'},lineStyle:{width:1.5}},
-        {name:'学习率',type:'line',yAxisIndex:1,showSymbol:false,
-         data:pts.map(p=>[p.step,p.lr]),itemStyle:{color:'#ea580c'},lineStyle:{type:'dashed',width:1}}]
-    },true);
-  };
-  es.addEventListener('end',()=>es&&es.close());
+        {name:'光伏',type:'line',smooth:true,showSymbol:false,data:cv.pv,itemStyle:{color:C.pv},areaStyle:{opacity:.12}},
+        {name:'风电',type:'line',smooth:true,showSymbol:false,data:cv.wind,itemStyle:{color:C.wind},areaStyle:{opacity:.12}},
+        {name:'负荷',type:'line',smooth:true,showSymbol:false,data:cv.load,itemStyle:{color:C.load},lineStyle:{width:2}},
+        {name:'电解槽计划',type:'line',smooth:true,showSymbol:false,data:ts.map(x=>x.ely_mw),itemStyle:{color:C.ely},lineStyle:{width:3}},
+        {name:'弃电',type:'bar',data:ts.map(x=>x.curtail_mw),itemStyle:{color:'rgba(255,159,67,.45)'},barWidth:3},
+      ]},true);
+    chart('rpAction').setOption({
+      backgroundColor:'transparent',
+      tooltip:{trigger:'axis',formatter:p=>`${p[0].data}: 档位${p[0].value}`},
+      grid:{left:42,right:12,top:10,bottom:26},
+      xAxis:axisX(ts.map(x=>x.hour),11),
+      yAxis:{type:'value',max:10,axisLabel:AXIS,splitLine:SPLIT},
+      series:[{type:'bar',data:ts.map(x=>x.action_level),barWidth:'100%',
+        itemStyle:{color:p=>['#18243e','#22304f','#1e3a5f','#164e8a','#1d4ed8','#2563eb','#3b82f6','#60a5fa','#f59e0b','#ea580c','#dc2626'][p.value],borderRadius:2}}]},true);
+    const b=j.baselines||{};
+    chart('rpCompare').setOption({
+      backgroundColor:'transparent',
+      tooltip:{trigger:'axis',formatter:'{b}: {c} 万元/日'},
+      grid:{left:58,right:8,top:12,bottom:40},
+      xAxis:{type:'category',data:['无电解槽','恒定功率','贪心消纳','本系统'],
+        axisLabel:{...AXIS,fontSize:10.5,interval:0},axisLine:{lineStyle:{color:'#28395c'}}},
+      yAxis:axisY('万元'),
+      series:[{type:'bar',data:[b.no_ely?.reward_wan??0,b.flat?.reward_wan??0,b.curtail_first?.reward_wan??0,s.reward_wan],
+        barWidth:26,label:{show:true,position:'top',color:'#dbe7ff',fontSize:11},
+        itemStyle:{color:p=>['#55688c','#3d4f73','#2fd571','#22d3ee'][p.dataIndex],borderRadius:[3,3,0,0]}}]},true);
+    Object.values(CHARTS).forEach(c=>c.resize());
+    pushEvt('info',`典型日复盘完成：${j.case.name}，全天收益 ${s.reward_wan} 万元`);
+  }catch(e){toast('复盘失败：'+e.message,'err',4500);}
+  card.classList.remove('running');card.disabled=false;
 }
-watchTrain();
 
-/* ---------------- 实时仿真 ---------------- */
-let ws=null,simRunning=false,simPaused=false;
-let simData={hour:[],pv:[],wind:[],load:[],ely:[],th:[],cumH:[],cumN:[]};
-function wsSend(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o));}
-function simConnect(cb){
-  if(ws&&ws.readyState===1)return cb();
-  toast('正在建立仿真连接…','info',1800);
-  ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws/simulate`);
-  ws.onopen=()=>cb&&cb();
-  ws.onmessage=e=>{
-    const j=JSON.parse(e.data);
-    if(j.type==='started'){simRunning=true;simPaused=false;setSimUI();return;}
-    if(j.type==='paused'){simPaused=true;setSimUI();return;}
-    if(j.type==='reset'){simRunning=false;simPaused=false;setSimUI();return;}
-    if(j.done&&j.summary){simRunning=false;setSimUI();renderSimSummary(j.summary);return;}
-    if(j.t!==undefined)pushSimPoint(j);
-  };
-}
-function setSimUI(){
-  const b=$('#simPlayBtn');
-  b.textContent=!simRunning?'开始仿真':(simPaused?'继续':'暂停');
-  b.classList.toggle('outline',simRunning&&!simPaused);
-  const st=$('#simState');
-  st.className='badge '+(simRunning&&!simPaused?'run':'stop');
-  st.textContent=simRunning?(simPaused?'已暂停':'运行中'):'未运行';
-}
-function simToggle(){
-  simConnect(()=>{
-    if(!simRunning){
-      simData={hour:[],pv:[],wind:[],load:[],ely:[],th:[],cumH:[],cumN:[]};
-      const o={cmd:'start',seed:(Math.random()*99991)|0,interval_ms:+$('#sSpeed').value};
-      const m=currentModel();if(m)o.model=m;
-      wsSend(o);
-    }else if(simPaused){wsSend({cmd:'resume',interval_ms:+$('#sSpeed').value});}
-    else{wsSend({cmd:'pause'});}
-  });
-}
-function simStepOnce(){simConnect(()=>wsSend({cmd:'step'}));}
-function simReset(){
-  simConnect(()=>wsSend({cmd:'reset',seed:(Math.random()*99991)|0}));
-  simData={hour:[],pv:[],wind:[],load:[],ely:[],th:[],cumH:[],cumN:[]};
-  $('#simClock').textContent='--:--';$('#simDay').textContent='0/96';
-  $('#simProg').style.width='0%';
-  $('#sCmd').textContent='场景已重置，点击「开始仿真」重新进入滚动决策';
-}
-function hm(h){return String(Math.floor(h)).padStart(2,'0')+':'+String(Math.round(h%1*60)).padStart(2,'0');}
-
-function pushSimPoint(j){
-  $('#simClock').textContent=hm(j.hour);
-  $('#simDay').textContent=(j.t+1)+'/96';
-  $('#simProg').style.width=((j.t+1)/96*100)+'%';
-  const D=simData;
-  D.hour.push(j.hour);D.pv.push(j.pv);D.wind.push(j.wind);D.load.push(j.load);
-  D.ely.push(j.ely_mw);D.th.push(j.th_mw);
-  D.cumH.push(j.cum_h2_t);D.cumN.push(j.cum_nh3_t);
-  const W=48,sl=a=>a.slice(-W);
-  chart('sPowerChart').setOption({
-    tooltip:{trigger:'axis'},legend:{textStyle:{color:'#334155',fontSize:10},top:0},
-    grid:{left:48,right:16,top:30,bottom:26},
-    xAxis:{type:'category',data:sl(D.hour).map(hm),axisLabel:{...AXIS,interval:7,fontSize:10},axisLine:{lineStyle:{color:'#cbd5e1'}}},
-    yAxis:{type:'value',name:'MW',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT},
-    series:[
-      {name:'光伏',type:'line',showSymbol:false,data:sl(D.pv),itemStyle:{color:C.pv},areaStyle:{opacity:.12}},
-      {name:'风电',type:'line',showSymbol:false,data:sl(D.wind),itemStyle:{color:C.wind},areaStyle:{opacity:.12}},
-      {name:'负荷',type:'line',showSymbol:false,data:sl(D.load),itemStyle:{color:C.load},lineStyle:{width:2}},
-      {name:'电解槽',type:'line',showSymbol:false,data:sl(D.ely),itemStyle:{color:C.ely},lineStyle:{width:3}},
-      {name:'火电',type:'line',showSymbol:false,data:sl(D.th),itemStyle:{color:C.th},lineStyle:{type:'dashed'}},
-    ]},true);
-  chart('sCumChart').setOption({
-    tooltip:{trigger:'axis'},legend:{textStyle:{color:'#334155',fontSize:10},top:0},
-    grid:{left:44,right:44,top:26,bottom:22},
-    xAxis:{type:'category',data:D.hour.map(hm),axisLabel:{...AXIS,interval:15,fontSize:10},axisLine:{lineStyle:{color:'#cbd5e1'}}},
-    yAxis:[
-      {type:'value',name:'氢 t',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT},
-      {type:'value',name:'氨 t',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:{show:false}}],
-    series:[
-      {name:'累计产氢',type:'line',showSymbol:false,data:D.cumH,itemStyle:{color:'#0891b2'},areaStyle:{opacity:.12}},
-      {name:'累计产氨',type:'line',yAxisIndex:1,showSymbol:false,data:D.cumN,itemStyle:{color:'#16a34a'}}]},true);
-  $('#sKpi').innerHTML=[
-    ['累计回报',j.cum_reward_wan+' 万',j.cum_reward_wan>=0?'pos':'neg'],
-    ['新能源利用率',(j.utilization*100).toFixed(1)+'%','blue'],
-    ['当前档位',j.action_level+' / 10','orange'],
-    ['电解槽出力',j.ely_mw+' MW',''],
-    ['累计产氢',j.cum_h2_t.toFixed(2)+' t',''],
-    ['累计产氨',j.cum_nh3_t.toFixed(3)+' t','pos'],
-  ].map(k=>`<div class="kpi ${k[2]}"><div class="v">${k[1]}</div><div class="l">${k[0]}</div></div>`).join('');
-  $('#sCmd').innerHTML=
-    `第 <b>${String(j.t+1).padStart(2,'0')}</b> 时步 · 下发电解槽档位 <b class="big">${j.action_level}</b>/10`+
-    `（${j.action_power}% 额定 = ${j.ely_mw} MW）<br>`+
-    `<span style="font-size:12px;color:var(--dim)">火电出力 ${j.th_mw} MW · 瞬时弃电 ${j.curtail_mw} MW · 本步收益 ${j.step_reward_wan} 万元</span>`;
-}
-function renderSimSummary(s){
-  log('一日 96 时步仿真结束','ok');
-  toast(`仿真结束：全天收益 ${s.total_reward_wan} 万元`,'ok');
-  $('#sCmd').innerHTML=
-    `<b style="color:var(--green)">全天 96 时步仿真完成</b><br>`+
-    `综合收益 ${s.total_reward_wan} 万元 · 产氢 ${s.h2_t} t · 产氨 ${s.nh3_t} t<br>`+
-    `<span style="font-size:12px;color:var(--dim)">新能源利用率 ${s.utilization_pct}%</span>`;
-}
-window.addEventListener('beforeunload',()=>{try{wsSend({cmd:'stop'})}catch(e){}});
-activate('predict');
+/* ================= 系统自动投运 ================= */
+connect();
 </script>
 </body>
 </html>
