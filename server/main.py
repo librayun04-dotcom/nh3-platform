@@ -131,6 +131,33 @@ def _single_action(agent, state: np.ndarray, mask: np.ndarray = None) -> int:
 
 
 # ============================================================
+# 调度策略注册表：RL 内核 + 规则策略
+# ============================================================
+STRATEGIES: Dict[str, dict] = {
+    "ppo": {"label": "PPO 智能调度", "kind": "rl"},
+    "curtail_first": {"label": "贪心消纳", "kind": "rule"},
+    "flat": {"label": "恒定功率", "kind": "rule"},
+    "no_ely": {"label": "电解槽停运", "kind": "rule"},
+}
+
+
+def norm_strategy(s: str) -> str:
+    return s if s in STRATEGIES else "ppo"
+
+
+def _rule_power(env, strategy: str) -> float:
+    """规则策略 → 电解槽功率标幺（口径与 src/agents/baseline.py 一致）"""
+    if strategy == "curtail_first":
+        # 弃电潜力全部用于制氢（限电解槽容量）
+        surplus = max(0.0, env.data["pv"][env.t] + env.data["wind"][env.t]
+                      - env.data["load"][env.t])
+        return float(min(1.0, surplus / env.ely.capacity))
+    if strategy == "flat":
+        return 0.6          # 恒定 60% 额定功率
+    return 0.0              # no_ely / 兜底：停运
+
+
+# ============================================================
 # 曲线注入环境（复用真实物理模型）
 # ============================================================
 def make_env_with_curve(curve: dict, seed: int = 0):
@@ -250,6 +277,47 @@ def run_dispatch(model_name: str, curve: dict) -> dict:
     scale = agent.reward_scale
     return {
         "model": model_name,
+        "steps": steps,
+        "summary": {
+            "reward_wan": round(sm["total_reward"] / scale, 2),
+            "utilization_pct": round(sm["renewable_utilization"] * 100, 1),
+            "curtail_rate_pct": round(sm["curtail_rate"] * 100, 1),
+            "h2_t": round(sm["h2_kg"] / 1000, 2),
+            "nh3_t": round(sm["nh3_t"], 2),
+            "co2_reduction_t": round(sm["co2_reduction_t"], 1),
+            "ely_energy_mwh": round(sm["ely_mwh"], 1),
+            "thermal_energy_mwh": round(sm["thermal_mwh"], 1),
+        },
+    }
+
+
+def run_dispatch_rule(strategy: str, curve: dict) -> dict:
+    """规则策略一日调度（输出结构与 run_dispatch 一致）"""
+    env = make_env_with_curve(curve)
+    s = env._state()
+    steps = []
+    t_idx = 0
+    scale = cfg.PPO.get("reward_scale", 1e4)
+    while True:
+        power = _rule_power(env, strategy)
+        idx = int(round(power * 10))
+        s2, r, done, info = env.step(np.array([power], dtype=np.float32))
+        i = t_idx % cfg.SIM_STEPS
+        steps.append({
+            "t": t_idx, "hour": round(i * 0.25, 2),
+            "action_level": idx,
+            "ely_mw": round(env.ely.power, 1),
+            "th_mw": round(env.thermal.total_power(), 1),
+            "curtail_mw": round(float(info.get("curtail_mw", 0.0)), 1),
+            "reward": round(r / scale, 3),
+        })
+        t_idx += 1
+        if done or s2 is None or t_idx >= cfg.SIM_STEPS * env.days:
+            break
+        s = s2
+    sm = env.summary()
+    return {
+        "model": STRATEGIES[strategy]["label"],
         "steps": steps,
         "summary": {
             "reward_wan": round(sm["total_reward"] / scale, 2),
@@ -388,19 +456,26 @@ def api_cases():
 
 
 @app.post("/api/run_case")
-async def api_run_case(case_id: str = Form(...), model: str = Form("")):
-    """内置案例一键运行：指定（或默认）模型推理 + 三基线对比 + 完整曲线"""
+async def api_run_case(case_id: str = Form(...), model: str = Form(""),
+                       strategy: str = Form("")):
+    """内置案例推演：strategy=ppo 用 RL 内核，其余用对应规则策略；均附三基线对比"""
     case = next((c for c in BUILTIN_CASES if c["id"] == case_id), None)
     if not case:
         raise HTTPException(404, f"案例 {case_id} 不存在")
     curve = _case_curve(case)
-    model_name = model.strip() or resolve_default_model()
-    result = run_dispatch(model_name, curve)
+    strat = norm_strategy(strategy.strip())
+    if strat == "ppo":
+        model_name = model.strip() or resolve_default_model()
+        result = run_dispatch(model_name, curve)
+        result["model"] = model_name
+    else:
+        result = run_dispatch_rule(strat, curve)
     result["baselines"] = {k: run_baseline_on_curve(k, curve)["summary"]
                            for k in ("no_ely", "flat", "curtail_first")}
     result["curve"] = curve
     result["case"] = {k: case[k] for k in ("id", "name", "tagline", "desc", "region")}
-    result["model"] = model_name
+    result["strategy"] = strat
+    result["strategy_label"] = STRATEGIES[strat]["label"]
     return JSONResponse(result)
 
 
@@ -538,10 +613,11 @@ async def api_train_stream():
 class SimSession:
     """单客户端实时仿真会话：AGCEnv + 训练策略，逐 15min 滚动决策"""
 
-    def __init__(self, model_name: str, seed: int = 3):
+    def __init__(self, model_name: str, seed: int = 3, strategy: str = "ppo"):
         from src.models.grid_env import AGCEnv
 
-        self.agent = load_agent(model_name)
+        self.agent = load_agent(model_name)   # 始终加载：支持运行中热切换回 PPO
+        self.strategy = norm_strategy(strategy)
         self.env = AGCEnv(seed=seed)
         self.env.reset()
         self.obs = self.env._state()
@@ -552,10 +628,14 @@ class SimSession:
     def step(self) -> dict:
         if self.done:
             return {"done": True}
-        # 动作掩码与训练/评估口径一致（方案H：峰时无过剩功率禁止高档位）
-        mask = self.env.action_mask()[None, :] if getattr(cfg, "ACTION_MASK", False) else None
-        idx = _single_action(self.agent, self.obs, mask)
-        power = float(self.agent.action_to_power(np.array([idx]))[0])
+        if self.strategy == "ppo":
+            # 动作掩码与训练/评估口径一致（方案H：峰时无过剩功率禁止高档位）
+            mask = self.env.action_mask()[None, :] if getattr(cfg, "ACTION_MASK", False) else None
+            idx = _single_action(self.agent, self.obs, mask)
+            power = float(self.agent.action_to_power(np.array([idx]))[0])
+        else:
+            power = _rule_power(self.env, self.strategy)
+            idx = int(round(power * 10))
         ns, r, done, info = self.env.step(np.array([power], dtype=np.float32))
         self.t += 1
         self.done = bool(done)
@@ -604,6 +684,7 @@ async def ws_simulate(ws: WebSocket):
     await ws.accept()
     session: SimSession | None = None
     auto_task = None
+    strat = "ppo"   # 连接级当前策略：新会话默认沿用
 
     async def auto_loop(interval_ms: int):
         try:
@@ -626,10 +707,24 @@ async def ws_simulate(ws: WebSocket):
                 # 未显式给种子时按时间生成 → 连续运行期间每日场景不同
                 raw_seed = msg.get("seed")
                 seed = int(raw_seed) if raw_seed is not None else int(time.time()) % 99991
-                session = SimSession(model, seed)
+                if msg.get("strategy") in STRATEGIES:
+                    strat = msg["strategy"]
+                session = SimSession(model, seed, strat)
                 interval = int(msg.get("interval_ms", 150))
                 auto_task = asyncio.create_task(auto_loop(interval))
-                await ws.send_json({"type": "started", "model": model, "interval_ms": interval})
+                await ws.send_json({"type": "started", "model": model,
+                                    "strategy": strat, "interval_ms": interval})
+            elif cmd == "strategy":
+                # 运行中热切换调度策略：保留环境状态与当日累计量
+                req = msg.get("strategy")
+                if req not in STRATEGIES:
+                    await ws.send_json({"type": "strategy", "error": f"未知策略 {req}"})
+                else:
+                    strat = req
+                    if session is not None and not session.done:
+                        session.strategy = req
+                    await ws.send_json({"type": "strategy", "strategy": req,
+                                        "label": STRATEGIES[req]["label"]})
             elif cmd == "pause":
                 if auto_task:
                     auto_task.cancel(); auto_task = None

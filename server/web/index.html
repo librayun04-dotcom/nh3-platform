@@ -83,6 +83,18 @@ body{background:var(--bg);color:var(--txt);font-size:13.5px;
 .kpi .u{font-size:11px;color:var(--faint);margin-left:4px;font-weight:400}
 
 /* AGC 指令面板 */
+.strat-row{display:flex;align-items:center;justify-content:center;gap:9px;margin-bottom:9px}
+.strat-row .lb{font-size:12px;color:var(--dim);letter-spacing:1px}
+select{appearance:none;-webkit-appearance:none;background:#fff;border:1px solid #b6c2d4;
+  border-radius:7px;color:var(--txt);padding:6px 30px 6px 11px;font-size:12.5px;
+  cursor:pointer;outline:none;font-family:inherit;transition:.15s}
+select:hover{border-color:#8898ae}
+select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.select-wrap{position:relative;display:inline-block}
+.select-wrap::after{content:'';position:absolute;right:11px;top:50%;width:6px;height:6px;
+  border-right:1.5px solid var(--faint);border-bottom:1.5px solid var(--faint);
+  transform:translateY(-70%) rotate(45deg);pointer-events:none}
+.replay-strategy{display:flex;align-items:center;gap:10px;margin-bottom:13px;font-size:12.5px;color:var(--dim)}
 .agc-cmd{text-align:center;padding:10px 10px 16px}
 .agc-cmd .t{font-size:12px;color:var(--dim);letter-spacing:2px}
 .agc-cmd .big{font-size:62px;font-weight:800;line-height:1.05;color:var(--blue);
@@ -202,7 +214,7 @@ tbody tr:hover td{background:#f6f9fd}
   <button data-p="trend">实时趋势</button>
   <button data-p="replay">典型日复盘</button>
   <button data-p="events">事件记录</button>
-  <div class="kernel"><span class="lamp g"></span>策略内核 PPO-v1.0 · 已投运</div>
+  <div class="kernel"><span class="lamp g"></span><span id="kernelTag">策略内核 PPO-v1.0 · 已投运</span></div>
 </div>
 
 <div class="wrap">
@@ -291,6 +303,17 @@ tbody tr:hover td{background:#f6f9fd}
         <div class="panel">
           <div class="p-h">AGC 实时指令<span class="r mono" id="cmdNo">CMD ---</span></div>
           <div class="p-b agc-cmd">
+            <div class="strat-row">
+              <span class="lb">调度策略</span>
+              <div class="select-wrap">
+                <select id="stratSel">
+                  <option value="ppo">PPO 智能调度（强化学习内核）</option>
+                  <option value="curtail_first">贪心消纳（规则）</option>
+                  <option value="flat">恒定功率 60%（规则）</option>
+                  <option value="no_ely">电解槽停运（参照）</option>
+                </select>
+              </div>
+            </div>
             <div class="t">电解槽功率档位指令</div>
             <div class="big mono" id="agcLevel">--</div>
             <div class="sub">共 11 档（0 ~ 100%）</div>
@@ -354,6 +377,17 @@ tbody tr:hover td{background:#f6f9fd}
     <div class="panel">
       <div class="p-h">典型日调度计划复盘<span class="r">由在运策略内核对典型场景执行全天推演</span></div>
       <div class="p-b">
+        <div class="replay-strategy">
+          <span>推演策略</span>
+          <div class="select-wrap">
+            <select id="rpStrat">
+              <option value="ppo">PPO 智能调度（强化学习内核）</option>
+              <option value="curtail_first">贪心消纳（规则）</option>
+              <option value="flat">恒定功率 60%（规则）</option>
+              <option value="no_ely">电解槽停运（参照）</option>
+            </select>
+          </div>
+        </div>
         <div class="cases" id="caseGrid"></div>
         <div class="hint">
           说明：复盘用于运行分析与岗位培训。系统按典型日气象条件驱动策略内核完整推演一天 96 时步，
@@ -500,7 +534,7 @@ function connect(){
     $('#connBanner').style.display='none';
     $('#commLamp').className='lamp g';$('#commTxt').textContent='通信正常';
     pushEvt('ok','SCADA 通信链路建立，AGC 策略内核投入自动方式');
-    wsSend({cmd:'start',interval_ms:speedMs});
+    wsSend({cmd:'start',interval_ms:speedMs,strategy:$('#stratSel').value});
   };
   ws.onclose=()=>{
     $('#connBanner').style.display='block';
@@ -516,7 +550,8 @@ function connect(){
       return;
     }
     if(j.type==='paused'||j.type==='reset'||j.type==='paced')return;
-    if(j.done&&j.summary){onDayDone(j.summary);setTimeout(()=>wsSend({cmd:'start',interval_ms:speedMs}),2600);return;}
+    if(j.type==='strategy'){toast('调度策略已切换为「'+j.label+'」','ok');return;}
+    if(j.done&&j.summary){onDayDone(j.summary);setTimeout(()=>wsSend({cmd:'start',interval_ms:speedMs,strategy:$('#stratSel').value}),2600);return;}
     if(j.t!==undefined)onStep(j);
   };
 }
@@ -542,6 +577,15 @@ setInterval(()=>{
   const r=(nextAt-Date.now())/1000;
   el.textContent=(r>0?r.toFixed(1):'0.0')+' s';
 },200);
+
+/* 调度策略热切换 */
+const STRAT_LABEL={ppo:'PPO 智能调度',curtail_first:'贪心消纳',flat:'恒定功率',no_ely:'电解槽停运'};
+$('#stratSel').onchange=()=>{
+  const v=$('#stratSel').value;
+  wsSend({cmd:'strategy',strategy:v});
+  pushEvt('info','调度策略切换为「'+STRAT_LABEL[v]+'」');
+  $('#kernelTag').textContent='调度策略：'+STRAT_LABEL[v];
+};
 
 /* ---------- 每时步处理 ---------- */
 function onStep(j){
@@ -698,11 +742,12 @@ async function runCase(id){
   card.querySelector('.name').textContent='全天推演中…';
   try{
     const body=new FormData();body.append('case_id',id);
+    body.append('strategy',$('#rpStrat').value);   // 按所选策略推演
     const r=await fetch('/api/run_case',{method:'POST',body});
     if(!r.ok)throw new Error((await r.json()).detail||r.statusText);
     const j=await r.json(),s=j.summary;
     $('#rpResult').style.display='block';
-    $('#rpMeta').textContent=j.case.name+' · '+j.case.region+' · 内核 PPO-v1.0';
+    $('#rpMeta').textContent=j.case.name+' · '+j.case.region+' · 策略「'+j.strategy_label+'」';
     const kpis=[
       ['综合收益 万/日',s.reward_wan,s.reward_wan>=0?'var(--green)':'var(--red)'],
       ['消纳率 %',s.utilization_pct,'var(--cyan)'],
@@ -747,7 +792,7 @@ async function runCase(id){
       backgroundColor:'transparent',
       tooltip:{trigger:'axis',formatter:'{b}: {c} 万元/日'},
       grid:{left:58,right:8,top:vmin<0?36:18,bottom:46},
-      xAxis:{type:'category',data:['无电解槽','恒定功率','贪心消纳','本系统'],
+      xAxis:{type:'category',data:['无电解槽','恒定功率','贪心消纳',j.strategy_label],
         axisLabel:{...AXIS,fontSize:10.5,interval:0},axisLine:{lineStyle:{color:'#c3ced9'}}},
       yAxis:{type:'value',name:'万元',nameTextStyle:AXIS,axisLabel:AXIS,splitLine:SPLIT,
              min:yMin,max:yMax},
