@@ -134,12 +134,18 @@ def _single_action(agent, state: np.ndarray, mask: np.ndarray = None) -> int:
 # 曲线注入环境（复用真实物理模型）
 # ============================================================
 def make_env_with_curve(curve: dict, seed: int = 0):
-    """创建 AGCEnv 并注入用户上传的 96 时步曲线"""
+    """创建 AGCEnv 并注入用户上传的 96 时步曲线（含物理约束清洗）"""
     from src.models.grid_env import AGCEnv
 
-    pv = np.asarray(curve["pv"], dtype=float)
-    wind = np.asarray(curve["wind"], dtype=float)
-    load = np.asarray(curve["load"], dtype=float)
+    def clean(a: np.ndarray, cap: float = None) -> np.ndarray:
+        a = np.nan_to_num(np.asarray(a, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
+        a = np.clip(a, 0.0, cap)          # 功率非负；不超过装机上限
+        return a
+
+    pv = clean(curve["pv"], cap=cfg.PV_CAPACITY)
+    wind = clean(curve["wind"], cap=cfg.WIND_CAPACITY)
+    load = np.clip(np.nan_to_num(np.asarray(curve["load"], dtype=float),
+                                 nan=0.0, posinf=0.0, neginf=0.0), 0.0, None)
 
     env = AGCEnv(seed=seed)
     env.reset()
@@ -232,7 +238,7 @@ def run_dispatch(model_name: str, curve: dict) -> dict:
             "action_level": idx,
             "ely_mw": round(env.ely.power, 1),
             "th_mw": round(env.thermal.total_power(), 1),
-            "curtail_mw": round(max(0.0, ren - env.data["load"][i] - env.ely.power), 1),
+            "curtail_mw": round(float(info.get("curtail_mw", 0.0)), 1),
             "reward": round(r / agent.reward_scale, 3),
         })
         t_idx += 1
@@ -283,10 +289,10 @@ def run_baseline_on_curve(kind: str, curve: dict) -> dict:
 # ============================================================
 @app.get("/api/models")
 def api_models(refresh: int = 0):
-    if refresh or not MODEL_REGISTRY:
-        scan_models()
+    # 每次查询都重扫磁盘：在线训练新产出的 checkpoint 即时可见
+    scan_models()
     return {"models": sorted(MODEL_REGISTRY.values(), key=lambda m: -m["mtime"]),
-            "device": _torch_device(), "n_models": len(MODEL_REGISTRY)}
+            "n_models": len(MODEL_REGISTRY)}
 
 
 @app.post("/api/models/rescan")
@@ -617,7 +623,10 @@ async def ws_simulate(ws: WebSocket):
                 if auto_task:
                     auto_task.cancel()
                 model = msg.get("model") or resolve_default_model()
-                session = SimSession(model, int(msg.get("seed", 3)))
+                # 未显式给种子时按时间生成 → 连续运行期间每日场景不同
+                raw_seed = msg.get("seed")
+                seed = int(raw_seed) if raw_seed is not None else int(time.time()) % 99991
+                session = SimSession(model, seed)
                 interval = int(msg.get("interval_ms", 150))
                 auto_task = asyncio.create_task(auto_loop(interval))
                 await ws.send_json({"type": "started", "model": model, "interval_ms": interval})

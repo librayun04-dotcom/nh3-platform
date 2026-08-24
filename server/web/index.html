@@ -38,8 +38,19 @@ body{background:var(--bg);color:var(--txt);font-size:13.5px;
 .datechip{font-size:11.5px;color:var(--dim);text-align:right}
 .shift{font-size:11.5px;color:var(--dim);border:1px solid var(--line);border-radius:6px;padding:4px 11px}
 .alarmchip{display:flex;align-items:center;gap:7px;font-size:12px;border-radius:6px;padding:4px 12px;
-  background:rgba(47,213,113,.07);border:1px solid rgba(47,213,113,.35);color:var(--green)}
-.alarmchip.hot{background:rgba(255,93,108,.08);border-color:rgba(255,93,108,.35);color:var(--red)}
+  background:rgba(47,213,113,.07);border:1px solid rgba(47,213,113,.35);color:var(--green);
+  cursor:pointer;transition:.2s}
+.alarmchip:hover{filter:brightness(1.25)}
+.alarmchip.hot{background:rgba(255,93,108,.08);border-color:rgba(255,93,108,.35);color:var(--red);
+  animation:alarmPulse 1.6s ease-in-out infinite}
+@keyframes alarmPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,93,108,.4)}50%{box-shadow:0 0 0 7px rgba(255,93,108,0)}}
+
+#connBanner{position:fixed;top:0;left:0;right:0;z-index:60;display:none;
+  background:#3a2c08;color:#ffd668;border-bottom:1px solid #6b5410;text-align:center;
+  font-size:12.5px;padding:7px 0;letter-spacing:1px}
+.dprog{height:5px;background:#15203a;border-radius:3px;overflow:hidden;margin-top:11px}
+.dprog i{display:block;height:100%;width:0%;border-radius:3px;
+  background:linear-gradient(90deg,#2563eb,#22d3ee);transition:width .45s ease}
 
 /* ================= 导航条 ================= */
 .navstrip{display:flex;gap:2px;background:#0a1428;border-bottom:1px solid var(--line);
@@ -52,6 +63,7 @@ body{background:var(--bg);color:var(--txt);font-size:13.5px;
 
 .wrap{max-width:1560px;margin:0 auto;padding:16px 22px 40px}
 .page{display:none}.page.active{display:block;animation:fadein .2s ease}
+#rpResult{animation:fadein .35s ease}
 @keyframes fadein{from{opacity:0}to{opacity:1}}
 
 /* ================= 面板 ================= */
@@ -111,10 +123,13 @@ body{background:var(--bg);color:var(--txt);font-size:13.5px;
 .sld .wire{stroke:#31456e;stroke-width:2;fill:none}
 .sld .flow{stroke-dasharray:7 7;animation:dash 1.1s linear infinite}
 @keyframes dash{to{stroke-dashoffset:-14}}
+#curtTag{transition:opacity .45s}
 .busbar{stroke:#4da3ff;stroke-width:5}
 
 /* 事件 */
 .evt{display:flex;gap:9px;padding:6px 2px;font-size:12px;border-bottom:1px dashed #16223c;line-height:1.5}
+.evt:first-child{animation:evtIn .28s ease}
+@keyframes evtIn{from{opacity:0;transform:translateY(-7px)}to{opacity:1;transform:none}}
 .evt:last-child{border-bottom:none}
 .evt .tm{color:var(--faint);font-family:Consolas,monospace;flex:none;width:58px}
 .evt .dot2{width:6px;height:6px;border-radius:50%;margin-top:6px;flex:none}
@@ -156,9 +171,15 @@ tbody tr:hover td{background:#101d38}
 .col{flex:1;min-width:270px}
 .hint{font-size:12px;color:var(--dim);line-height:1.75;background:#0c1730;
   border-left:3px solid #28395c;padding:9px 13px;border-radius:0 7px 7px 0;margin-top:12px}
+@media(max-width:1280px){.kpis{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:760px){.kpis{grid-template-columns:repeat(2,1fr)}
+  .sysbar{gap:10px;padding:0 12px}.shift{display:none}
+  .g-overview{grid-template-columns:1fr}.navstrip{padding:0 10px;overflow-x:auto}}
 </style>
 </head>
 <body>
+
+<div id="connBanner">SCADA 通信链路中断，正在重连…</div>
 
 <!-- ================= 系统状态栏 ================= -->
 <div class="sysbar">
@@ -169,9 +190,9 @@ tbody tr:hover td{background:#101d38}
     <div><b>氨电联产 AGC 调度控制系统</b><i>NH3-COGEN ENERGY MANAGEMENT SYSTEM</i></div>
   </div>
   <div class="comm"><span class="lamp g" id="commLamp"></span><span id="commTxt">通信正常</span></div>
-  <div class="shift">值别：白班 · 运行方式：AGC 自动</div>
+  <div class="shift">值别：<span id="shiftTxt">白班</span> · 运行方式：AGC 自动</div>
   <div class="sp"></div>
-  <div class="alarmchip" id="alarmChip">告警 0</div>
+  <div class="alarmchip" id="alarmChip" title="点击查看事件记录">告警 0</div>
   <div>
     <div class="clock mono" id="clock">--:--:--</div>
     <div class="datechip" id="dateChip">----</div>
@@ -195,8 +216,8 @@ tbody tr:hover td{background:#101d38}
       <div class="kpi" style="--kc:var(--cyan)"><div class="l">当前 AGC 指令</div><div class="v mono" id="kCmd">--<span class="u">档</span></div></div>
       <div class="kpi" style="--kc:var(--green)"><div class="l">当日综合收益</div><div class="v mono" id="kRev">--<span class="u">万元</span></div></div>
       <div class="kpi" style="--kc:var(--blue)"><div class="l">新能源利用率（日累计）</div><div class="v mono" id="kUtil">--<span class="u">%</span></div></div>
-      <div class="kpi" style="--kc:var(--purple)"><div class="l">累计产氢</div><div class="v mono" id="kH2">--<span class="u">t</span></div></div>
-      <div class="kpi" style="--kc:var(--green)"><div class="l">累计产氨</div><div class="v mono" id="kNh3">--<span class="u">t</span></div></div>
+      <div class="kpi" style="--kc:var(--purple)"><div class="l">当日累计产氢</div><div class="v mono" id="kH2">--<span class="u">t</span></div></div>
+      <div class="kpi" style="--kc:var(--green)"><div class="l">当日累计产氨</div><div class="v mono" id="kNh3">--<span class="u">t</span></div></div>
       <div class="kpi" style="--kc:var(--orange)"><div class="l">瞬时弃电</div><div class="v mono" id="kCurt">--<span class="u">MW</span></div></div>
     </div>
 
@@ -257,8 +278,8 @@ tbody tr:hover td{background:#101d38}
               <polygon points="820,196 815,187 825,187" fill="#a78bfa"/>
 
               <text id="curtTag" x="540" y="118" text-anchor="middle"
-                    style="fill:#ff9f43;font-weight:700;display:none">弃电中 -- MW</text>
-              <text x="40" y="384" style="fill:#55688c">实线 = 功率潮流　虚线 = 物料流　箭头 = 潮流方向　数值为实时遥测</text>
+                    style="fill:#ff9f43;font-weight:700;opacity:0">弃电中 -- MW</text>
+              <text x="40" y="384" style="fill:#55688c">实线 = 功率潮流　虚线 = 物料流　箭头 = 潮流方向　数值为实时遥测（火电机组按 AGC 均分方式调度）</text>
             </svg>
           </div>
         </div>
@@ -277,7 +298,8 @@ tbody tr:hover td{background:#101d38}
             <div class="big mono" id="agcLevel">--</div>
             <div class="sub">共 11 档（0 ~ 100%）</div>
             <div class="mw mono"><span id="agcMw">---</span><span> / 400 MW</span></div>
-            <div class="nextin">下一指令下发：<span class="mono" id="nextIn">-- s</span></div>
+            <div class="dprog"><i id="dayProg"></i></div>
+            <div class="nextin">运行日进度 <span class="mono" id="dayStep">0/96</span> 时步 · 下一指令 <span class="mono" id="nextIn">-- s</span></div>
             <div class="seg" id="speedSeg">
               <button data-ms="4000">慢速</button>
               <button data-ms="1500" class="on">常用</button>
@@ -392,12 +414,14 @@ function toast(msg,type='info',ms=3600){
 }
 window.alert=m=>toast(m,'err',5000);
 
-/* ---------- 时钟 ---------- */
+/* ---------- 时钟（含值别） ---------- */
 function tick(){
   const n=new Date();
   $('#clock').textContent=n.toLocaleTimeString('zh-CN',{hour12:false});
   $('#dateChip').textContent=
     `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')} 星期${'日一二三四五六'[n.getDay()]}`;
+  const h=n.getHours();
+  $('#shiftTxt').textContent=h<8?'夜班':(h<16?'白班':'中班');
 }
 setInterval(tick,1000);tick();
 
@@ -451,20 +475,37 @@ $$('#evtFilters .fbtn').forEach(b=>b.onclick=()=>{
   $$('#evtFilters .fbtn').forEach(x=>x.classList.remove('on'));
   b.classList.add('on');evtFilter=b.dataset.f;renderEvtTable();
 });
+/* 点击告警徽章 → 直达事件记录页 */
+$('#alarmChip').onclick=()=>document.querySelector('.navstrip button[data-p="events"]').click();
 
 /* ---------- 仿真接入（自动连续运行） ---------- */
 let ws=null,speedMs=1500,simDay=1,lastStep=null,dayStart=true,curtOn=false,nextAt=0;
 let series={hour:[],pv:[],wind:[],load:[],ely:[],th:[],curtail:[],cumH:[],cumN:[],util:[]};
 
 function wsSend(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o));}
+
+/* KPI 数字补间：避免生硬跳变 */
+function tweenNum(id,to,dec,unit){
+  const el=document.getElementById(id);
+  const from=(el._v==null)?to:el._v;el._v=to;
+  const t0=performance.now(),dur=600;
+  (function fr(t){
+    const p=Math.min(1,(t-t0)/dur),e=1-Math.pow(1-p,3);
+    el.innerHTML=(from+(to-from)*e).toFixed(dec)+'<span class="u">'+unit+'</span>';
+    if(p<1)requestAnimationFrame(fr);
+  })(t0);
+}
+
 function connect(){
   ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws/simulate`);
   ws.onopen=()=>{
+    $('#connBanner').style.display='none';
     $('#commLamp').className='lamp g';$('#commTxt').textContent='通信正常';
     pushEvt('ok','SCADA 通信链路建立，AGC 策略内核投入自动方式');
     wsSend({cmd:'start',interval_ms:speedMs});
   };
   ws.onclose=()=>{
+    $('#connBanner').style.display='block';
     $('#commLamp').className='lamp r';$('#commTxt').textContent='通信中断';
     pushEvt('alarm','SCADA 通信链路中断，尝试重连…');
     setTimeout(connect,2500);
@@ -486,6 +527,8 @@ function onDayDone(s){
   toast(`第 ${simDay} 运行日结算完成：${s.total_reward_wan} 万元`,'ok');
   simDay++;dayStart=true;curtOn=false;lastStep=null;
   series={hour:[],pv:[],wind:[],load:[],ely:[],th:[],curtail:[],cumH:[],cumN:[],util:[]};
+  ['kRev','kUtil','kH2','kNh3'].forEach(id=>{const el=document.getElementById(id);if(el)el._v=0;});
+  $('#dayProg').style.width='0%';$('#dayStep').textContent='0/96';
   renderTrend();
 }
 $$('#speedSeg button').forEach(b=>b.onclick=()=>{
@@ -509,19 +552,21 @@ function onStep(j){
   D.ely.push(j.ely_mw);D.th.push(j.th_mw);D.curtail.push(j.curtail_mw);
   D.cumH.push(j.cum_h2_t);D.cumN.push(j.cum_nh3_t);D.util.push(+(j.utilization*100).toFixed(2));
 
-  /* KPI */
+  /* KPI（连续量数字补间，瞬时量直读） */
   $('#kCmd').innerHTML=j.action_level+'<span class="u">档</span>';
-  $('#kRev').innerHTML=j.cum_reward_wan.toFixed(1)+'<span class="u">万元</span>';
-  $('#kUtil').innerHTML=(j.utilization*100).toFixed(1)+'<span class="u">%</span>';
-  $('#kH2').innerHTML=j.cum_h2_t.toFixed(2)+'<span class="u">t</span>';
-  $('#kNh3').innerHTML=j.cum_nh3_t.toFixed(2)+'<span class="u">t</span>';
+  tweenNum('kRev',j.cum_reward_wan,1,'万元');
+  tweenNum('kUtil',j.utilization*100,1,'%');
+  tweenNum('kH2',j.cum_h2_t,2,'t');
+  tweenNum('kNh3',j.cum_nh3_t,2,'t');
   $('#kCurt').innerHTML=j.curtail_mw.toFixed(0)+'<span class="u">MW</span>';
 
-  /* AGC 指令面板 */
+  /* AGC 指令面板 + 运行日进度 */
   $('#agcLevel').textContent=j.action_level;
   $('#agcMw').textContent=j.ely_mw;
   $('#cmdNo').textContent='CMD '+String(simDay).padStart(2,'0')+String(j.t+1).padStart(3,'0');
   nextAt=Date.now()+speedMs;   // 倒计时由全局走秒器刷新
+  $('#dayProg').style.width=((j.t+1)/96*100)+'%';
+  $('#dayStep').textContent=(j.t+1)+'/96';
 
   /* 档位变化事件 */
   if(lastStep&&j.action_level!==lastStep.lv){
@@ -547,7 +592,7 @@ function onStep(j){
   $('#sldG2').textContent=$('#valG2').textContent=thAvg.toFixed(0)+' MW';
   $('#sldG3').textContent=$('#valG3').textContent=thAvg.toFixed(0)+' MW';
   const ct=$('#curtTag');
-  ct.style.display=on?'block':'none';
+  ct.style.opacity=on?'1':'0';
   if(on)ct.textContent='弃电中 '+j.curtail_mw.toFixed(0)+' MW';
 
   /* 机组状态 */
@@ -587,7 +632,13 @@ function renderOv(){
 
 /* ---------- 趋势页 ---------- */
 function renderTrend(){
-  const D=series;if(!D.hour.length)return;
+  const D=series;
+  if(!D.hour.length){
+    chart('trPower').setOption({backgroundColor:'transparent',graphic:[{type:'text',
+      left:'center',top:'middle',style:{text:'等待当前运行日数据…',fill:'#55688c',fontSize:14}}]},true);
+    chart('trProd').clear();chart('trUtil').clear();
+    return;
+  }
   chart('trPower').setOption({
     backgroundColor:'transparent',
     tooltip:{trigger:'axis'},legend:{textStyle:{color:'#9db1d6',fontSize:11},top:0},
@@ -645,6 +696,8 @@ async function runCase(id){
   const card=$('#case-'+id);
   $$('.case-card').forEach(x=>x.classList.remove('running'));
   card.classList.add('running');card.disabled=true;
+  const oldTxt=card.querySelector('.name').textContent;
+  card.querySelector('.name').textContent='全天推演中…';
   try{
     const body=new FormData();body.append('case_id',id);
     const r=await fetch('/api/run_case',{method:'POST',body});
@@ -696,7 +749,9 @@ async function runCase(id){
         itemStyle:{color:p=>['#55688c','#3d4f73','#2fd571','#22d3ee'][p.dataIndex],borderRadius:[3,3,0,0]}}]},true);
     Object.values(CHARTS).forEach(c=>c.resize());
     pushEvt('info',`典型日复盘完成：${j.case.name}，全天收益 ${s.reward_wan} 万元`);
+    setTimeout(()=>$('#rpResult').scrollIntoView({behavior:'smooth',block:'start'}),80);
   }catch(e){toast('复盘失败：'+e.message,'err',4500);}
+  card.querySelector('.name').textContent=oldTxt;
   card.classList.remove('running');card.disabled=false;
 }
 
