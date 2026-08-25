@@ -28,7 +28,11 @@ from typing import Dict, List
 
 import numpy as np
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if getattr(sys, "frozen", False):
+    # PyInstaller 打包运行：资源解包目录即仓库根（spec 已按原目录结构收集）
+    PROJECT_ROOT = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+else:
+    PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import config as cfg  # noqa: E402
@@ -811,4 +815,7 @@ async def startup():
 
 
 if __name__ == "__main__":
-    uvicorn.run("server.main:app", host="127.0.0.1", port=8000, reload=False)
+    if getattr(sys, "frozen", False):
+        uvicorn.run(app, host="127.0.0.1", port=8000)
+    else:
+        uvicorn.run("server.main:app", host="127.0.0.1", port=8000, reload=False)
