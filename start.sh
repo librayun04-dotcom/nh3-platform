@@ -6,8 +6,8 @@ if ! command -v python3 &>/dev/null; then
     echo "[错误] 未找到 python3"; exit 1
 fi
 
-python3 -c "import fastapi, uvicorn, pandas" 2>/dev/null || {
-    echo "[提示] 正在安装依赖..."
+python3 -c "import fastapi, uvicorn, pandas, multipart, numpy, torch, openpyxl" 2>/dev/null || {
+    echo "[提示] 正在安装运行依赖（首次约需数分钟）..."
     pip3 install -r requirements.txt -q
 }
 
